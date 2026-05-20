@@ -1,0 +1,71 @@
+# === Secrets & Credentials (NEVER COMMIT THESE) ===
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials/
+*.secret
+
+# === Via Compiler & Build Artifacts ===
+build/
+target/
+dist/
+out/
+*.o
+*.bc
+*.ll
+*.wasm
+*.py[cod]
+__pycache__/
+*.egg-info/
+
+# === Virtual Environments ===
+.venv/
+venv/
+virtualEnv/
+.uv_cache/
+
+# === Dependencies ===
+node_modules/
+
+# === IDEs & Editors ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.iml
+
+# === Operating Systems ===
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+# Linux
+*~
+.directory
+
+# === Temporary & Log Files ===
+*.log
+*.tmp
+*.temp
+*.cache
+*.pid
+debug*.py
+*.pdf
+.docx
+
+# === Misc ===
+.direnv/
+.envrc
