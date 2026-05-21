@@ -37,20 +37,27 @@ Author: AmirMohammad Ghasemzadeh
 Version: 4.0.0 - Production Ready
 """
 
+import re
 import sys
 import os
 import platform
 import logging
 import math
 import json
+import threading
 from enum import Enum, auto
 from typing import Dict, Optional, Tuple, Union, Any, List, Callable
 from dataclasses import dataclass, field
 from collections import OrderedDict
 from pathlib import Path
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
+# Pre-compiled regex patterns for performance
+HEX_COLOR_PATTERN = re.compile(r'^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$')
+RGBA_PATTERN = re.compile(r'^rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*[\d.]+\s*\)$')
+GRADIENT_PATTERN = re.compile(r'^q(lineargradient|radialgradient|conicalgradient)\(')
 
 # ============================================================================
 # Type Aliases
@@ -209,6 +216,75 @@ class IconSize(Enum):
 # Utility Functions
 # ============================================================================
 
+class LRUCache:
+    """پیاده‌سازی LRU Cache با محدودیت سایز و پشتیبانی کامل از dict interface."""
+
+    def __init__(self, max_size: int = 500):
+        self._cache: OrderedDict[str, str] = OrderedDict()
+        self._max_size = max_size
+
+    def get(self, key: str) -> Optional[str]:
+        """دریافت مقدار از کش. None اگر وجود نداشته باشد."""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return None
+
+    def set(self, key: str, value: str):
+        """ذخیره مقدار در کش با سیاست LRU."""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        else:
+            if self._max_size <= 0:
+                return
+            if len(self._cache) >= self._max_size:
+                if len(self._cache) > 0:
+                    self._cache.popitem(last=False)
+        self._cache[key] = value
+
+    def __getitem__(self, key: str) -> str:
+        """دسترسی با براکت. KeyError اگر وجود نداشته باشد."""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: str):
+        """ذخیره با براکت."""
+        self.set(key, value)
+
+    def __contains__(self, key: str) -> bool:
+        """بررسی وجود کلید با `in` operator."""
+        return key in self._cache
+
+    def __len__(self) -> int:
+        return len(self._cache)
+
+    def clear(self):
+        """پاک کردن کامل کش."""
+        self._cache.clear()
+
+    def remove(self, key: str):
+        """حذف یک کلید خاص."""
+        if key in self._cache:
+            del self._cache[key]
+
+    def keys(self):
+        """لیست کلیدهای موجود."""
+        return list(self._cache.keys())
+
+    def values(self):
+        """لیست مقادیر موجود."""
+        return list(self._cache.values())
+
+    @property
+    def size(self) -> int:
+        return len(self._cache)
+
+    @property
+    def max_size(self) -> int:
+        return self._max_size
+
 def hex_to_rgba(hex_color: str, alpha: float = 1.0) -> str:
     """تبدیل رنگ hex به rgba برای Qt."""
     hex_color = hex_color.lstrip('#')
@@ -216,11 +292,11 @@ def hex_to_rgba(hex_color: str, alpha: float = 1.0) -> str:
         hex_color = ''.join(c * 2 for c in hex_color)
     if len(hex_color) == 6:
         r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
-        return f"rgba({r}, {g}, {b}, {int(alpha * 255)})"
+        return f"rgba({r}, {g}, {b}, {round(alpha * 255)})"  # round به‌جای int
     if len(hex_color) == 8:
         r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
         a = int(hex_color[6:8], 16) / 255
-        return f"rgba({r}, {g}, {b}, {int(a * alpha * 255)})"
+        return f"rgba({r}, {g}, {b}, {round(a * alpha * 255)})"  # round
     return hex_color
 
 
@@ -269,9 +345,9 @@ def mix_colors(color1: str, color2: str, ratio: float = 0.5) -> str:
     if len(c2) == 3: c2 = ''.join(c * 2 for c in c2)
     if len(c1) < 6 or len(c2) < 6:
         return color1
-    r = int(int(c1[0:2], 16) * (1 - ratio) + int(c2[0:2], 16) * ratio)
-    g = int(int(c1[2:4], 16) * (1 - ratio) + int(c2[2:4], 16) * ratio)
-    b = int(int(c1[4:6], 16) * (1 - ratio) + int(c2[4:6], 16) * ratio)
+    r = round(int(c1[0:2], 16) * (1 - ratio) + int(c2[0:2], 16) * ratio)
+    g = round(int(c1[2:4], 16) * (1 - ratio) + int(c2[2:4], 16) * ratio)
+    b = round(int(c1[4:6], 16) * (1 - ratio) + int(c2[4:6], 16) * ratio)
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
@@ -432,6 +508,44 @@ class ColorPalette:
     chart_7: str = "#06B6D4"
     chart_8: str = "#F97316"
 
+    # === Alpha-derived colors (auto-calculated) ===
+    primary_alpha_10: str = field(init=False)
+    primary_alpha_20: str = field(init=False)
+    primary_alpha_30: str = field(init=False)
+
+    def __post_init__(self):
+        """اعتبارسنجی رنگ‌ها و محاسبه alpha variants."""
+        for field_name in self.__dataclass_fields__:
+            if field_name.startswith('primary_alpha_'):
+                continue
+
+            value = getattr(self, field_name)
+            if value is None or value == "":
+                continue
+
+            # Check gradient patterns
+            if GRADIENT_PATTERN.match(value):
+                continue
+
+            # Check rgba
+            if value.startswith('rgba'):
+                if not RGBA_PATTERN.match(value):
+                    logger.warning(f"Invalid rgba: {field_name}={value}")
+                continue
+
+            # Check hex
+            if value.startswith('#'):
+                if not HEX_COLOR_PATTERN.match(value):
+                    logger.warning(f"Invalid hex: {field_name}={value}")
+                continue
+
+            # Unknown format
+            logger.warning(f"Unexpected color format: {field_name}={value}")
+
+        # محاسبه alpha variants
+        object.__setattr__(self, 'primary_alpha_10', hex_to_rgba(self.primary, 0.1))
+        object.__setattr__(self, 'primary_alpha_20', hex_to_rgba(self.primary, 0.2))
+        object.__setattr__(self, 'primary_alpha_30', hex_to_rgba(self.primary, 0.3))
 
 @dataclass(frozen=True)
 class FontConfig:
@@ -972,8 +1086,8 @@ class PaletteFactory:
             text_tertiary="#94A3B8", text_disabled="#CBD5E1",
             text_on_primary="#FFFFFF", text_on_dark="#F1F5F9", text_link="#2563EB",
             text_link_hover="#1D4ED8",
-            border="#CBD5E1", border_light="#E2E8F0", border_focus="#2563EB",
-            border_hover="#94A3B8", border_error="#EF4444", border_success="#10B981",
+            border="#64748B", border_light="#CBD5E1", border_focus="#2563EB",
+            border_hover="#64748B", border_error="#EF4444", border_success="#10B981",
             gradient_start="#4A90E2", gradient_mid="#6A52B5", gradient_end="#8E44AD",
             gradient_accent="#F59E0B",
         )
@@ -992,8 +1106,8 @@ class PaletteFactory:
             text_tertiary="#64748B", text_disabled="#475569",
             text_on_primary="#0F172A", text_on_dark="#F1F5F9", text_link="#60A5FA",
             text_link_hover="#93C5FD",
-            border="#334155", border_light="#475569", border_focus="#3B82F6",
-            border_hover="#475569", border_error="#F87171", border_success="#34D399",
+            border="#64748B", border_light="#475569", border_focus="#3B82F6",
+            border_hover="#94A3B8", border_error="#F87171", border_success="#34D399",
             gradient_start="#1E3A5F", gradient_mid="#2D1B4E", gradient_end="#3B0A45",
             gradient_accent="#FBBF24",
         )
@@ -1019,7 +1133,7 @@ class PaletteFactory:
     @staticmethod
     def _ocean() -> ColorPalette:
         return ColorPalette(
-            primary="#0EA5E9", primary_light="#38BDF8", primary_dark="#0284C7",
+            primary="#0284C7", primary_light="#0EA5E9", primary_dark="#0369A1",
             secondary="#06B6D4", secondary_light="#22D3EE", secondary_dark="#0891B2",
             tertiary="#6366F1", tertiary_light="#818CF8", tertiary_dark="#4F46E5",
             accent="#14B8A6", accent_light="#5EEAD4", accent_dark="#0D9488",
@@ -1027,11 +1141,11 @@ class PaletteFactory:
             background="#F0F9FF", background_alt="#E0F2FE", background_elevated="#FFFFFF",
             surface="#FFFFFF", surface_hover="#BAE6FD", surface_pressed="#7DD3FC",
             surface_selected="#DBEAFE",
-            text_primary="#0C4A6E", text_secondary="#0EA5E9",
-            text_tertiary="#38BDF8", text_disabled="#BAE6FD",
+            text_primary="#0C4A6E", text_secondary="#0369A1",
+            text_tertiary="#0EA5E9", text_disabled="#BAE6FD",
             text_on_primary="#FFFFFF", text_on_dark="#E0F2FE", text_link="#0284C7",
             text_link_hover="#0EA5E9",
-            border="#7DD3FC", border_light="#BAE6FD", border_focus="#0EA5E9",
+            border="#0EA5E9", border_light="#7DD3FC", border_focus="#0EA5E9",
             border_hover="#38BDF8", border_error="#EF4444", border_success="#10B981",
             gradient_start="#0EA5E9", gradient_mid="#06B6D4", gradient_end="#6366F1",
             gradient_accent="#14B8A6",
@@ -1052,8 +1166,8 @@ class PaletteFactory:
             text_tertiary="#65A30D", text_disabled="#86EFAC",
             text_on_primary="#FFFFFF", text_on_dark="#ECFCCB", text_link="#16A34A",
             text_link_hover="#4ADE80",
-            border="#86EFAC", border_light="#BBF7D0", border_focus="#16A34A",
-            border_hover="#4ADE80", border_error="#DC2626", border_success="#16A34A",
+            border="#16A34A", border_light="#86EFAC", border_focus="#16A34A",
+            border_hover="#22C55E", border_error="#DC2626", border_success="#16A34A",
             gradient_start="#16A34A", gradient_mid="#65A30D", gradient_end="#D97706",
             gradient_accent="#78350F",
         )
@@ -1073,7 +1187,7 @@ class PaletteFactory:
             text_tertiary="#C2410C", text_disabled="#FDBA74",
             text_on_primary="#FFFFFF", text_on_dark="#FFEDD5", text_link="#EA580C",
             text_link_hover="#FB923C",
-            border="#FDBA74", border_light="#FED7AA", border_focus="#EA580C",
+            border="#F97316", border_light="#FDBA74", border_focus="#EA580C",
             border_hover="#FB923C", border_error="#DC2626", border_success="#10B981",
             gradient_start="#EA580C", gradient_mid="#DC2626", gradient_end="#7C3AED",
             gradient_accent="#F59E0B",
@@ -1095,8 +1209,8 @@ class PaletteFactory:
             text_tertiary="#64748B", text_disabled="#374151",
             text_on_primary="#FFFFFF", text_on_dark="#E2E8F0", text_link="#C4B5FD",
             text_link_hover="#8B5CF6",
-            border="#1F2937", border_light="#374151", border_focus="#8B5CF6",
-            border_hover="#4B5563", border_error="#F87171", border_success="#34D399",
+            border="#4B5563", border_light="#374151", border_focus="#8B5CF6",
+            border_hover="#6B7280", border_error="#F87171", border_success="#34D399",
             gradient_start="#020617", gradient_mid="#1E1B4B", gradient_end="#2D1B4E",
             gradient_accent="#F59E0B",
         )
@@ -1105,7 +1219,7 @@ class PaletteFactory:
     def _aurora() -> ColorPalette:
         """تم شفق قطبی - سبز-بنفش-آبی روشن."""
         return ColorPalette(
-            primary="#14B8A6", primary_light="#5EEAD4", primary_dark="#0D9488",
+            primary="#106D66", primary_light="#14B8A6", primary_dark="#115E59",
             secondary="#8B5CF6", secondary_light="#C4B5FD", secondary_dark="#6D28D9",
             tertiary="#3B82F6", tertiary_light="#93C5FD", tertiary_dark="#1D4ED8",
             accent="#F59E0B", accent_light="#FCD34D", accent_dark="#D97706",
@@ -1117,7 +1231,7 @@ class PaletteFactory:
             text_tertiary="#14B8A6", text_disabled="#A5F3FC",
             text_on_primary="#FFFFFF", text_on_dark="#ECFEFF", text_link="#0D9488",
             text_link_hover="#5EEAD4",
-            border="#67E8F9", border_light="#A5F3FC", border_focus="#14B8A6",
+            border="#0D9488", border_light="#5EEAD4", border_focus="#14B8A6",
             border_hover="#5EEAD4", border_error="#EF4444", border_success="#10B981",
             gradient_start="#14B8A6", gradient_mid="#8B5CF6", gradient_end="#3B82F6",
             gradient_accent="#F59E0B",
@@ -1201,29 +1315,43 @@ class SystemDetector:
 
     @staticmethod
     def get_dpi_scale() -> float:
+        """تشخیص DPI Scaling Factor با fallback امن."""
         try:
             if SystemDetector.check_qt_availability(QtVersion.PYQT6):
                 from PyQt6.QtWidgets import QApplication
             else:
                 from PyQt5.QtWidgets import QApplication
+
             app = QApplication.instance()
-            if app:
-                screen = app.primaryScreen()
-                if hasattr(screen, 'devicePixelRatio'):
-                    return screen.devicePixelRatio()
-        except Exception: pass
+            if app is None:
+                logger.debug("QApplication not yet created, cannot detect DPI")
+                return 1.0
+
+            screen = app.primaryScreen()
+            if screen is None:
+                logger.debug("No primary screen found")
+                return 1.0
+
+            if hasattr(screen, 'devicePixelRatio'):
+                return screen.devicePixelRatio()
+            elif hasattr(screen, 'logicalDotsPerInch'):
+                return screen.logicalDotsPerInch() / 96.0
+        except Exception as e:
+            logger.warning(f"Failed to detect DPI: {e}")
+
         return 1.0
 
     @staticmethod
     def get_system_memory_gb() -> float:
-        """تشخیص مقدار RAM سیستم (GB)."""
+        """تشخیص مقدار RAM سیستم (GB). با fallback امن."""
         try:
-            try:
-                import psutil #type: ignore
-            except ImportError:
-                psutil = None
+            import psutil
             return psutil.virtual_memory().total / (1024**3)
         except ImportError:
+            logger.debug("psutil not installed, cannot detect RAM")
+            return 0.0
+        except Exception as e:
+            logger.warning(f"Failed to detect RAM: {e}")
             return 0.0
 
     @staticmethod
@@ -1240,22 +1368,31 @@ class QtAdapter:
     """آداپتور یکسان‌سازی API بین PyQt5 و PyQt6."""
 
     _instance: Optional['QtAdapter'] = None
+    _lock = threading.Lock()
     _initialized: bool = False
 
     def __new__(cls) -> 'QtAdapter':
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self):
-        if QtAdapter._initialized: return
+        if QtAdapter._initialized:
+            return
 
-        self._qt_version = SystemDetector.get_available_qt_version()
-        self._import_modules()
-        self._setup_enums()
-        self._setup_high_dpi()
-        QtAdapter._initialized = True
-        logger.info(f"QtAdapter ready: {self._qt_version.name}")
+        with QtAdapter._lock:
+            if QtAdapter._initialized:
+                return
+
+            self._qt_version = SystemDetector.get_available_qt_version()
+            self._import_modules()
+            self._setup_enums()
+            self._setup_high_dpi()
+
+            QtAdapter._initialized = True
+            logger.info(f"QtAdapter ready: {self._qt_version.name}")
 
     def _import_modules(self):
         if self._qt_version == QtVersion.PYQT6:
@@ -1419,40 +1556,71 @@ class ThemeManager:
     _instance: Optional['ThemeManager'] = None
     _initialized: bool = False
     _observers: List[Callable[[ThemeMode], None]] = []
+    _instance_lock = threading.Lock()
+    _observers_lock = threading.Lock()  # Class-level lock
 
-    def __new__(cls) -> 'ThemeManager':
+    def __new__(cls):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self):
-        if ThemeManager._initialized: return
+        if ThemeManager._initialized:
+            return
 
-        self._system = SystemDetector()
-        self._adapter = QtAdapter()
-        self._qt_version = self._adapter.qt_version
+        with ThemeManager._instance_lock:
+            if ThemeManager._initialized:
+                return
 
-        self._mode = ThemeMode.LIGHT
-        self._palette = PaletteFactory.create(self._mode)
-        self._font_config = FontConfig()
-        self._glass_level = GlassLevel.NONE
-        self._shadow_elevation = ShadowElevation.LOW
-        self._border_radius = BorderRadius.NORMAL
-        self._animation_duration = AnimationDuration.NORMAL
+            self._system = SystemDetector()
+            self._adapter = QtAdapter()
+            self._qt_version = self._adapter.qt_version
 
+            self._mode = ThemeMode.LIGHT
+            self._palette = PaletteFactory.create(self._mode)
+            self._font_config = FontConfig()
+            self._glass_level = GlassLevel.NONE
+            self._shadow_elevation = ShadowElevation.LOW
+            self._border_radius = BorderRadius.NORMAL
+            self._animation_duration = AnimationDuration.NORMAL
+
+            self._available_fonts: Optional[List[str]] = None
+            self._fonts_checked: bool = False
+            self._style_cache = LRUCache(max_size=500)
+
+            ThemeManager._initialized = True
+            logger.info(
+                f"ThemeManager v4.0: {self._system.get_windows_version_name()}, "
+                f"{self._qt_version.name}, {self._mode.name}"
+            )
+
+    @property
+    def available_fonts(self) -> List[str]:
+        """Lazy loading فونت‌ها."""
+        if self._available_fonts is None:
+            self._load_fonts()
+        return self._available_fonts
+
+
+    def _load_fonts(self):
+        """بارگذاری تنبل فونت‌ها."""
         try:
             self._available_fonts = self._adapter.QFontDatabase().families()
-        except Exception:
-            self._available_fonts = []
+        except Exception as e:
+            logger.error(f"Failed to load fonts: {e}")
+            self._available_fonts = ["Arial"]
 
+        # حالا که فونت‌ها رو داریم، fallback ها رو چک کن
         self._check_available_fonts()
-        self._style_cache: Dict[str, str] = {}
 
-        ThemeManager._initialized = True
-        logger.info(f"ThemeManager v4.0: {self._system.get_windows_version_name()}, {self._qt_version.name}, {self._mode.name}")
 
     def _check_available_fonts(self):
-        if not self._available_fonts: return
+        """بررسی و تنظیم فونت‌های fallback."""
+        if not self._available_fonts or self._fonts_checked:
+            return
+
         fc = self._font_config
 
         if fc.family_fa not in self._available_fonts:
@@ -1473,19 +1641,29 @@ class ThemeManager:
                     object.__setattr__(fc, 'family_mono', f)
                     break
 
+        self._fonts_checked = True
+
     # ----- Observer Pattern -----
 
     def subscribe(self, callback: Callable[[ThemeMode], None]):
-        self._observers.append(callback)
+        with ThemeManager._observers_lock:
+            if callback not in self._observers:
+                self._observers.append(callback)
 
     def unsubscribe(self, callback: Callable[[ThemeMode], None]):
-        if callback in self._observers:
-            self._observers.remove(callback)
+        with ThemeManager._observers_lock:
+            if callback in self._observers:
+                self._observers.remove(callback)
 
     def _notify_observers(self):
-        for cb in self._observers:
-            try: cb(self._mode)
-            except Exception as e: logger.error(f"Observer error: {e}")
+        with ThemeManager._observers_lock:
+            observers_copy = list(self._observers)  # Thread-safe copy
+
+        for cb in observers_copy:
+            try:
+                cb(self._mode)
+            except Exception as e:
+                logger.error(f"Observer error: {e}")
 
     # ----- Properties -----
 
@@ -1537,20 +1715,184 @@ class ThemeManager:
         self._border_radius = radius
         self._style_cache.clear()
 
+    def _get_all_contrast_ratios(self) -> List[float]:
+        """محاسبه همه نسبت‌های کنتراست مهم."""
+        p = self._palette
+        ratios = []
+
+        # Primary checks
+        ratios.append(contrast_ratio(p.text_primary, p.background))
+        ratios.append(contrast_ratio(p.text_secondary, p.background))
+        ratios.append(contrast_ratio(p.text_on_primary, p.primary))
+        ratios.append(contrast_ratio(p.text_on_dark, p.primary_dark))
+
+        # Border checks
+        ratios.append(contrast_ratio(p.border, p.background))
+        ratios.append(contrast_ratio(p.border_focus, p.background))
+
+        return ratios
+
+    def check_accessibility(self) -> dict:
+        """
+        بررسی accessibility تم فعلی بر اساس WCAG 2.1.
+
+        Returns:
+            dict with:
+                - passes: bool - آیا همه بررسی‌ها پاس شدن؟
+                - level: str - سطح WCAG ("AAA", "AA", "FAIL")
+                - issues: list - مشکلات یافت شده
+                - ratios: dict - نسبت‌های کنتراست
+        """
+        p = self._palette
+        issues = []
+        ratio_details = {}
+
+        # Check 1: Text primary on background
+        r1 = contrast_ratio(p.text_primary, p.background)
+        ratio_details['text_primary/bg'] = round(r1, 2)
+        if r1 < 4.5:
+            issues.append(f"متن اصلی روی پس‌زمینه: {r1:.1f}:1 (حداقل 4.5:1 نیاز است)")
+
+        # Check 2: Text secondary on background
+        r2 = contrast_ratio(p.text_secondary, p.background)
+        ratio_details['text_secondary/bg'] = round(r2, 2)
+        if r2 < 3.0:
+            issues.append(f"متن فرعی روی پس‌زمینه: {r2:.1f}:1 (حداقل 3.0:1 نیاز است)")
+
+        # Check 3: Text on primary
+        r3 = contrast_ratio(p.text_on_primary, p.primary)
+        ratio_details['text_on_primary'] = round(r3, 2)
+        if r3 < 4.5:
+            issues.append(f"متن روی دکمه اصلی: {r3:.1f}:1 (حداقل 4.5:1 نیاز است)")
+
+        # Check 4: Border on background
+        r4 = contrast_ratio(p.border, p.background)
+        ratio_details['border/bg'] = round(r4, 2)
+        if r4 < 3.0:
+            issues.append(f"حاشیه روی پس‌زمینه: {r4:.1f}:1 (حداقل 3.0:1 نیاز است)")
+
+        # Check 5: Link text
+        r5 = contrast_ratio(p.text_link, p.background)
+        ratio_details['link/bg'] = round(r5, 2)
+        if r5 < 3.0:
+            issues.append(f"لینک روی پس‌زمینه: {r5:.1f}:1 (حداقل 3.0:1 نیاز است)")
+
+        # Determine WCAG level
+        all_ratios = list(ratio_details.values())
+        if all(r >= 7.0 for r in all_ratios):
+            level = "AAA"
+        elif all(r >= 4.5 for r in all_ratios):
+            level = "AA"
+        elif all(r >= 3.0 for r in all_ratios):
+            level = "AA (Large Text)"
+        else:
+            level = "FAIL"
+
+        return {
+            "passes": len(issues) == 0,
+            "level": level,
+            "issues": issues,
+            "ratios": ratio_details,
+            "theme": self._mode.name,
+        }
+
+    def print_accessibility_report(self):
+        """نمایش گزارش accessibility در کنسول."""
+        report = self.check_accessibility()
+        print(f"\n{'='*50}")
+        print(f"♿ Accessibility Report - {report['theme']} Theme")
+        print(f"{'='*50}")
+        print(f"Status: {'✅ PASS' if report['passes'] else '❌ FAIL'}")
+        print(f"WCAG Level: {report['level']}")
+        print(f"\nContrast Ratios:")
+        for name, ratio in report['ratios'].items():
+            status = "✅" if ratio >= 4.5 else ("⚠️" if ratio >= 3.0 else "❌")
+            print(f"  {status} {name}: {ratio}:1")
+        if report['issues']:
+            print(f"\nIssues Found:")
+            for issue in report['issues']:
+                print(f"  • {issue}")
+        print(f"{'='*50}\n")
+        return report
+
+    @contextmanager
+    def temporary_theme(self, mode: ThemeMode):
+        """
+        تغییر موقت تم.
+
+        Usage:
+            with theme.temporary_theme(ThemeMode.DARK):
+                # اینجا تم Dark هست
+                show_dark_dialog()
+            # اینجا تم به حالت قبل برمیگرده
+        """
+        old_mode = self._mode
+        self.set_mode(mode)
+        try:
+            yield
+        finally:
+            self.set_mode(old_mode)
+
+    @contextmanager
+    def temporary_glass(self, level: GlassLevel):
+        """تغییر موقت سطح glass."""
+        old_level = self._glass_level
+        self.set_glass_level(level)
+        try:
+            yield
+        finally:
+            self.set_glass_level(old_level)
+
     # ----- Font Methods -----
+
+    def _get_fallback_font(self, family: str) -> str:
+        """پیدا کردن اولین فونت fallback موجود."""
+        fallback_map = {
+            self._font_config.family_fa: self._font_config.family_fa_fallback,
+            self._font_config.family_en: self._font_config.family_en_fallback,
+            self._font_config.family_mono: self._font_config.family_mono_fallback,
+            self._font_config.family_math: self._font_config.family_math_fallback,
+        }
+
+        fallbacks = fallback_map.get(family, ["Arial"])
+        for fallback in fallbacks:
+            if isinstance(fallback, str) and fallback in self._available_fonts:
+                return fallback
+
+        # Last resort
+        if self._available_fonts:
+            return self._available_fonts[0]
+        return "Arial"
 
     def get_font(self, size: Union[int, FontSize] = FontSize.NORMAL,
                  bold: bool = False, mono: bool = False, math: bool = False,
                  rtl: bool = True, italic: bool = False) -> Any:
-        if isinstance(size, FontSize): size = size.value
-        family = (self._font_config.family_math if math else
-                  self._font_config.family_mono if mono else
-                  self._font_config.family_fa if rtl else
-                  self._font_config.family_en)
-        font = self._adapter.QFont(family, size)
-        if bold: font.setBold(True)
-        if italic: font.setItalic(True)
-        return font
+        if isinstance(size, FontSize):
+            size = size.value
+
+        family = (
+            self._font_config.family_math if math else
+            self._font_config.family_mono if mono else
+            self._font_config.family_fa if rtl else
+            self._font_config.family_en
+        )
+
+        # Validate font exists, use fallback if not
+        if self._available_fonts and family not in self._available_fonts:
+            family = self._get_fallback_font(family)
+
+        try:
+            font = self._adapter.QFont(family, size)
+            font.setBold(bold)
+            font.setItalic(italic)
+            return font
+        except Exception as e:
+            logger.error(f"Failed to create font {family}: {e}")
+            # Ultimate fallback
+            font = self._adapter.QFont("Arial", size)
+            font.setBold(bold)
+            font.setItalic(italic)
+            return font
 
     def get_app_font(self): return self.get_font(size=FontSize.NORMAL)
     def get_title_font(self): return self.get_font(size=FontSize.TITLE, bold=True)
@@ -1583,55 +1925,362 @@ class ThemeManager:
     # Style Sheet Builders (۳۰+ متد)
     # =========================================================================
 
-    def get_button_style(self, variant: str = "primary", size: str = "normal",
-                         full_width: bool = False, rounded: bool = False) -> str:
-        cache_key = f"btn_{variant}_{size}_{full_width}_{rounded}"
-        if cache_key in self._style_cache: return self._style_cache[cache_key]
+    def get_button_style(
+        self,
+        variant: str = "primary",
+        size: str = "normal",
+        full_width: bool = False,
+        rounded: bool = False,
+        disabled: bool = False,
+        glass: bool = False,
+        custom_bg: Optional[str] = None,
+        custom_text_color: Optional[str] = None,
+    ) -> str:
+        """
+        تولید استایل QPushButton با پشتیبانی از variant‌های مختلف.
+
+        Args:
+            variant: نوع دکمه
+                - "primary": دکمه اصلی با رنگ primary
+                - "secondary": دکمه فرعی با رنگ secondary
+                - "tertiary": دکمه سطح سوم
+                - "accent": دکمه تأکیدی
+                - "danger": دکمه خطر (قرمز)
+                - "success": دکمه موفقیت (سبز)
+                - "warning": دکمه هشدار (نارنجی)
+                - "info": دکمه اطلاعات (آبی)
+                - "ghost": دکمه شفاف
+                - "outline": دکمه خط‌دار
+                - "link": دکمه لینک
+                - "custom": دکمه سفارشی (نیاز به custom_bg)
+            size: سایز دکمه - "tiny", "small", "normal", "large", "xl"
+            full_width: آیا تمام عرض والد را بگیرد؟
+            rounded: آیا کاملاً گرد (pill shape) باشد؟
+            disabled: آیا غیرفعال باشد؟
+            glass: آیا افکت شیشه‌ای داشته باشد؟
+            custom_bg: رنگ پس‌زمینه سفارشی (برای variant="custom")
+            custom_text_color: رنگ متن سفارشی
+
+        Returns:
+            stylesheet string برای QPushButton
+
+        Example:
+            >>> theme.get_button_style("primary", "large")
+            >>> theme.get_button_style("danger", full_width=True)
+            >>> theme.get_button_style("custom", custom_bg="#FF5733")
+            >>> theme.get_button_style("outline", rounded=True, glass=True)
+        """
+        # Build cache key
+        cache_key = (
+            f"btn_{variant}_{size}_{int(full_width)}_{int(rounded)}_"
+            f"{int(disabled)}_{int(glass)}_{custom_bg}_{custom_text_color}"
+        )
+
+        cached = self._style_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
         p = self._palette
-        variants = {
-            "primary": (p.primary, p.primary_dark, p.text_on_primary),
-            "secondary": (p.secondary, p.secondary_dark, p.text_on_primary),
-            "tertiary": (p.tertiary, p.tertiary_dark, p.text_on_primary),
-            "accent": (p.accent, p.accent_dark, p.text_primary),
-            "danger": (p.error, p.error_dark, p.text_on_primary),
-            "success": (p.success, p.success_dark, p.text_on_primary),
-            "warning": (p.warning, p.warning_dark, "#000000"),
-            "ghost": ("transparent", p.surface_hover, p.text_primary),
-            "outline": ("transparent", p.primary_alpha_20 if hasattr(p, 'primary_alpha_20') else "rgba(37, 99, 235, 0.1)", p.primary),
-            "link": ("transparent", "transparent", p.text_link),
+        fc = self._font_config
+
+        # ========================================================================
+        # Define variant color mappings
+        # ========================================================================
+        variant_map = {
+            "primary": {
+                "bg": p.primary,
+                "bg_hover": p.primary_dark,
+                "bg_pressed": darken_color(p.primary_dark, 0.1),
+                "bg_disabled": p.text_disabled,
+                "text": p.text_on_primary,
+                "text_disabled": p.text_tertiary,
+                "border": "none",
+                "border_hover": "none",
+                "border_focus": p.border_focus,
+            },
+            "secondary": {
+                "bg": p.secondary,
+                "bg_hover": p.secondary_dark,
+                "bg_pressed": darken_color(p.secondary_dark, 0.1),
+                "bg_disabled": p.text_disabled,
+                "text": p.text_on_primary,
+                "text_disabled": p.text_tertiary,
+                "border": "none",
+                "border_hover": "none",
+                "border_focus": p.border_focus,
+            },
+            "tertiary": {
+                "bg": p.tertiary or p.primary,
+                "bg_hover": p.tertiary_dark or p.primary_dark,
+                "bg_pressed": darken_color(p.tertiary_dark or p.primary_dark, 0.1),
+                "bg_disabled": p.text_disabled,
+                "text": p.text_on_primary,
+                "text_disabled": p.text_tertiary,
+                "border": "none",
+                "border_hover": "none",
+                "border_focus": p.border_focus,
+            },
+            "accent": {
+                "bg": p.accent or "#F59E0B",
+                "bg_hover": p.accent_dark or "#D97706",
+                "bg_pressed": darken_color(p.accent_dark or "#D97706", 0.1),
+                "bg_disabled": p.text_disabled,
+                "text": p.text_primary,
+                "text_disabled": p.text_tertiary,
+                "border": "none",
+                "border_hover": "none",
+                "border_focus": p.border_focus,
+            },
+            "danger": {
+                "bg": p.error,
+                "bg_hover": p.error_dark,
+                "bg_pressed": darken_color(p.error_dark, 0.15),
+                "bg_disabled": p.text_disabled,
+                "text": p.text_on_primary,
+                "text_disabled": p.text_tertiary,
+                "border": "none",
+                "border_hover": "none",
+                "border_focus": p.border_error,
+            },
+            "success": {
+                "bg": p.success,
+                "bg_hover": p.success_dark,
+                "bg_pressed": darken_color(p.success_dark, 0.1),
+                "bg_disabled": p.text_disabled,
+                "text": p.text_on_primary,
+                "text_disabled": p.text_tertiary,
+                "border": "none",
+                "border_hover": "none",
+                "border_focus": p.border_success,
+            },
+            "warning": {
+                "bg": p.warning,
+                "bg_hover": p.warning_dark,
+                "bg_pressed": darken_color(p.warning_dark, 0.1),
+                "bg_disabled": p.text_disabled,
+                "text": "#000000",
+                "text_disabled": p.text_tertiary,
+                "border": "none",
+                "border_hover": "none",
+                "border_focus": p.border_focus,
+            },
+            "info": {
+                "bg": p.info,
+                "bg_hover": p.info_dark,
+                "bg_pressed": darken_color(p.info_dark, 0.1),
+                "bg_disabled": p.text_disabled,
+                "text": p.text_on_primary,
+                "text_disabled": p.text_tertiary,
+                "border": "none",
+                "border_hover": "none",
+                "border_focus": p.border_focus,
+            },
+            "ghost": {
+                "bg": "transparent",
+                "bg_hover": p.surface_hover,
+                "bg_pressed": p.surface_pressed,
+                "bg_disabled": "transparent",
+                "text": p.text_primary,
+                "text_disabled": p.text_disabled,
+                "border": "none",
+                "border_hover": "none",
+                "border_focus": p.border_focus,
+            },
+            "outline": {
+                "bg": "transparent",
+                "bg_hover": p.primary_alpha_10 if hasattr(p, 'primary_alpha_10') else hex_to_rgba(p.primary, 0.1),
+                "bg_pressed": p.primary_alpha_20 if hasattr(p, 'primary_alpha_20') else hex_to_rgba(p.primary, 0.2),
+                "bg_disabled": "transparent",
+                "text": p.primary,
+                "text_disabled": p.text_disabled,
+                "border": f"2px solid {p.primary}",
+                "border_hover": f"2px solid {p.primary_dark}",
+                "border_focus": f"2px solid {p.border_focus}",
+            },
+            "link": {
+                "bg": "transparent",
+                "bg_hover": "transparent",
+                "bg_pressed": "transparent",
+                "bg_disabled": "transparent",
+                "text": p.text_link,
+                "text_disabled": p.text_disabled,
+                "border": "none",
+                "border_hover": "none",
+                "border_focus": f"1px dashed {p.border_focus}",
+            },
+            "custom": {
+                "bg": custom_bg or p.primary,
+                "bg_hover": darken_color(custom_bg or p.primary, 0.1),
+                "bg_pressed": darken_color(custom_bg or p.primary, 0.2),
+                "bg_disabled": p.text_disabled,
+                "text": custom_text_color or p.text_on_primary,
+                "text_disabled": p.text_tertiary,
+                "border": "none",
+                "border_hover": "none",
+                "border_focus": p.border_focus,
+            },
         }
-        bg, bg_hover, text_color = variants.get(variant, variants["primary"])
 
-        padding_map = {"tiny": "4px 8px", "small": "6px 12px", "normal": "10px 20px", "large": "14px 28px", "xl": "18px 36px"}
-        padding = padding_map.get(size, "10px 20px")
-        font_size_map = {"tiny": p.font_config.size_tiny if hasattr(p, 'font_config') else 10, "small": 11, "normal": 13, "large": 15, "xl": 17}
-        font_size = font_size_map.get(size, 13)
-        width = "width: 100%;" if full_width else ""
-        border = f"2px solid {p.primary}" if variant == "outline" else ("none" if variant not in ("",) else f"1px solid {p.border}")
-        if variant == "link": border = "none"
-        radius = "24px" if rounded else f"{self._border_radius.value}px"
-        underline = "text-decoration: underline;" if variant == "link" else ""
+        variant_config = variant_map.get(variant, variant_map["primary"])
 
+        # Override text color if custom_text_color provided
+        if custom_text_color and variant != "custom":
+            variant_config["text"] = custom_text_color
+
+        # ========================================================================
+        # Size mappings
+        # ========================================================================
+        size_config = {
+            "tiny": {
+                "padding": "3px 8px",
+                "font_size": fc.size_caption,
+                "min_width": "40px",
+                "min_height": "20px",
+            },
+            "small": {
+                "padding": "5px 12px",
+                "font_size": fc.size_tiny,
+                "min_width": "60px",
+                "min_height": "26px",
+            },
+            "normal": {
+                "padding": "8px 18px",
+                "font_size": fc.size_normal,
+                "min_width": "80px",
+                "min_height": "32px",
+            },
+            "large": {
+                "padding": "12px 24px",
+                "font_size": fc.size_large,
+                "min_width": "100px",
+                "min_height": "40px",
+            },
+            "xl": {
+                "padding": "16px 32px",
+                "font_size": fc.size_xl,
+                "min_width": "120px",
+                "min_height": "48px",
+            },
+        }
+
+        size_data = size_config.get(size, size_config["normal"])
+
+        # ========================================================================
+        # Border radius
+        # ========================================================================
+        if rounded:
+            border_radius = "24px"
+        elif size == "tiny":
+            border_radius = "3px"
+        elif size == "small":
+            border_radius = "4px"
+        elif size == "large":
+            border_radius = "10px"
+        elif size == "xl":
+            border_radius = "12px"
+        else:
+            border_radius = f"{self._border_radius.value}px"
+
+        # ========================================================================
+        # Glass effect (with native Qt approximation)
+        # ========================================================================
+        glass_style = ""
+        if glass and self._glass_level != GlassLevel.NONE:
+            glass_params = GlassmorphismSystem.get_glass_params(
+                self._glass_level,
+                (255, 255, 255, 220) if not self.is_dark else (30, 30, 50, 200)
+            )
+            r, g, b, bg_a = glass_params.bg_color
+            br, bg_b, bb, border_a = glass_params.border_color
+            glass_style = f"""
+                background-color: rgba({r}, {g}, {b}, {bg_a});
+                border: {glass_params.border_width}px solid rgba({br}, {bg_b}, {bb}, {border_a});
+            """
+            # Override default border if glass is enabled
+            if variant not in ("outline",):
+                variant_config["border"] = f"{glass_params.border_width}px solid rgba({br}, {bg_b}, {bb}, {border_a})"
+
+        # ========================================================================
+        # Width style
+        # ========================================================================
+        width_style = "width: 100%;" if full_width else ""
+
+        # ========================================================================
+        # Disabled state overrides
+        # ========================================================================
+        if disabled:
+            variant_config["bg"] = variant_config["bg_disabled"]
+            variant_config["text"] = variant_config["text_disabled"]
+
+        # ========================================================================
+        # Build the stylesheet
+        # ========================================================================
         style = f"""
             QPushButton {{
-                background-color: {bg};
-                color: {text_color};
-                border: {border};
-                border-radius: {radius};
-                padding: {padding};
-                font-family: '{self._font_config.family_fa}';
-                font-size: {font_size}px;
+                /* Layout */
+                padding: {size_data['padding']};
+                min-width: {size_data['min_width']};
+                min-height: {size_data['min_height']};
+                {width_style}
+
+                /* Colors */
+                background-color: {variant_config['bg']};
+                color: {variant_config['text']};
+
+                /* Border */
+                border: {variant_config['border']};
+                border-radius: {border_radius};
+
+                /* Typography */
+                font-family: '{fc.family_fa}';
+                font-size: {size_data['font_size']}px;
                 font-weight: 600;
-                {width}
-                {underline}
+
+                /* Spacing */
+                margin: 2px;
+
+                /* Glass effect */
+                {glass_style}
             }}
-            QPushButton:hover {{ background-color: {bg_hover}; }}
-            QPushButton:pressed {{ background-color: {bg}; opacity: 0.8; }}
-            QPushButton:disabled {{ background-color: {p.text_disabled}; color: {p.text_tertiary}; }}
-            QPushButton:focus {{ border: 2px solid {p.border_focus}; outline: none; }}
+
+            QPushButton:hover {{
+                background-color: {variant_config['bg_hover']};
+                border: {variant_config['border_hover']};
+            }}
+
+            QPushButton:pressed {{
+                background-color: {variant_config['bg_pressed']};
+            }}
+
+            QPushButton:disabled {{
+                background-color: {variant_config['bg_disabled']};
+                color: {variant_config['text_disabled']};
+                border: {variant_config['border']};
+            }}
+
+            QPushButton:focus {{
+                border: {variant_config['border_focus']};
+                outline: none;
+            }}
+
+            QPushButton:focus-visible {{
+                border: 2px solid {p.border_focus};
+            }}
         """
-        self._style_cache[cache_key] = style
+
+        # Add link-specific underline
+        if variant == "link":
+            style += f"""
+            QPushButton {{
+                text-decoration: underline;
+            }}
+            QPushButton:hover {{
+                color: {p.text_link_hover};
+            }}
+            """
+
+        # Cache and return
+        self._style_cache.set(cache_key, style)
         return style
 
     def get_input_style(self, size: str = "normal", variant: str = "default",

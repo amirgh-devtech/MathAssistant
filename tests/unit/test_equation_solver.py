@@ -477,7 +477,13 @@ class TestParallelEquationSolver:
         equations = ["x + 1 = 2", "x + = 5", "2x = 6"]
         df = parallel_solver.solve_batch(equations)
         assert len(df) == 3
-        assert df.iloc[1]['success'] == False
+
+        error_row = df[df['equation'] == 'x + = 5']
+        assert len(error_row) == 1
+        assert error_row.iloc[0]['success'] == False
+
+        assert df[df['equation'] == 'x + 1 = 2'].iloc[0]['success'] == True
+        assert df[df['equation'] == '2x = 6'].iloc[0]['success'] == True
 # ============================================================================
 # تست‌های EquationSolverEngine (Facade)
 # ============================================================================

@@ -685,20 +685,11 @@ class StepByStepSolver:
         try:
             if '=' in equation_str:
                 lhs, rhs = equation_str.split('=', 1)
-                lhs_expr = parse_expr(
-                    lhs.strip(),
-                    transformations=EquationParser.TRANSFORMATIONS
-                )
-                rhs_expr = parse_expr(
-                    rhs.strip(),
-                    transformations=EquationParser.TRANSFORMATIONS
-                )
+                lhs_expr = parse_expr(lhs.strip(), transformations=EquationParser.TRANSFORMATIONS)
+                rhs_expr = parse_expr(rhs.strip(), transformations=EquationParser.TRANSFORMATIONS)
                 return Eq(lhs_expr, rhs_expr)
             else:
-                expr = parse_expr(
-                    equation_str.strip(),
-                    transformations=EquationParser.TRANSFORMATIONS
-                )
+                expr = parse_expr(equation_str.strip(), transformations=EquationParser.TRANSFORMATIONS)
                 return Eq(expr, 0)
         except Exception as e:
             logger.error(f"Cannot create sympy equation from '{equation_str}': {e}")
@@ -727,16 +718,20 @@ class StepByStepSolver:
         steps = []
 
         try:
-            # ----- گام 0: پارس و استانداردسازی -----
             standardized, variables, _ = self.parser.parse(equation_str)
-
-            # ساخت معادله SymPy با متد امن
             sympy_eq = self._create_sympy_eq_safe(standardized)
 
             if not variables:
                 return self._create_error_solution(
                     equation_str,
                     "هیچ متغیری در معادله یافت نشد.",
+                    start_time
+                )
+
+            if sympy_eq is None:
+                return self._create_error_solution(
+                    equation_str,
+                    f"خطا در تجزیه معادله. لطفاً فرمت معادله را بررسی کنید.",
                     start_time
                 )
 
@@ -861,12 +856,17 @@ class StepByStepSolver:
         try:
             syms = symbols(variables)
 
-            # اگر sympy_eq وجود نداشت، دوباره تلاش برای ساخت
             if sympy_eq is None:
                 sympy_eq = self._create_sympy_eq_safe(equation)
 
             if sympy_eq is None:
-                return steps, solutions
+                steps.append(SolutionStep(
+                    step_number=start_step,
+                    title="❌ خطا در تجزیه معادله",
+                    description="فرمت معادله نامعتبر است. لطفاً بررسی کنید.",
+                    step_type="explanation"
+                ))
+                return steps, list()
 
             # انتخاب استراتژی حل بر اساس نوع معادله
             solver_map = {
@@ -1459,15 +1459,9 @@ class StepByStepSolver:
 
         return round(value, 6)
 
-    def _create_error_solution(
-        self,
-        equation: str,
-        error_msg: str,
-        start_time: float
-    ) -> EquationSolution:
+    def _create_error_solution(self, equation: str, error_msg: str, start_time: float) -> EquationSolution:
         """ساخت نتیجه استاندارد برای حالت خطا."""
         execution_time = (time.perf_counter() - start_time) * 1000
-
         return EquationSolution(
             original_equation=equation,
             processed_equation=equation,
@@ -1513,34 +1507,31 @@ class ParallelEquationSolver:
         self.max_workers = max_workers or os.cpu_count() or 4
         self.solver = StepByStepSolver()
 
-    def solve_batch(
-        self, equations: List[str], show_progress: bool = False
-    ) -> pd.DataFrame:
+    def solve_batch(self, equations: List[str], show_progress: bool = False) -> pd.DataFrame:
         """
-        حل دسته‌ای چند معادله به صورت موازی.
+        حل دسته‌ای چند معادله با حفظ ترتیب.
 
         Args:
             equations: لیست معادلات
             show_progress: نمایش پیشرفت
 
         Returns:
-            DataFrame حاوی نتایج همه معادلات
+            DataFrame با نتایج (ترتیب مشابه ورودی)
         """
         results = []
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_eq = {
-                executor.submit(self.solver.solve, eq): eq
-                for eq in equations
-            }
+            futures = [executor.submit(self.solver.solve, eq) for eq in equations]
 
-            completed = 0
-            total = len(equations)
-
-            for future in as_completed(future_to_eq):
-                eq = future_to_eq[future]
+            for eq, future in zip(equations, futures):
                 try:
                     result = future.result()
+
+                    has_error = any(
+                        "خطا" in step.title or "خطا" in step.description
+                        for step in result.steps
+                    )
+
                     results.append({
                         'equation': eq,
                         'type': result.analysis.equation_type.name,
@@ -1549,10 +1540,17 @@ class ParallelEquationSolver:
                         'solution_count': result.solution_count,
                         'steps_count': len(result.steps),
                         'time_ms': round(result.execution_time_ms, 2),
-                        'success': (result.solution_count > 0 and
-            result.analysis.equation_type != EquationType.UNKNOWN)
+                        'success': (
+                            result.solution_count > 0
+                            and not has_error
+                        ),
                     })
+
+                    if show_progress:
+                        logger.info(f"Solved: {eq}")
+
                 except Exception as e:
+                    logger.error(f"Error solving '{eq}': {e}")
                     results.append({
                         'equation': eq,
                         'type': 'ERROR',
@@ -1561,12 +1559,8 @@ class ParallelEquationSolver:
                         'solution_count': 0,
                         'steps_count': 0,
                         'time_ms': 0,
-                        'success': False
+                        'success': False,
                     })
-
-                completed += 1
-                if show_progress:
-                    logger.info(f"Progress: {completed}/{total}")
 
         return pd.DataFrame(results)
 
