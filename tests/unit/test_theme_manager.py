@@ -441,6 +441,9 @@ class TestSystemInfo:
 
 class TestProperties:
     """تست properties"""
+    def setup_method(self):
+        ThemeManager._instance = None
+        ThemeManager._initialized = False
 
     def test_mode_property(self, theme_manager):
         assert theme_manager.mode == ThemeMode.LIGHT

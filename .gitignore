@@ -1,4 +1,4 @@
-# === Secrets & Credentials (NEVER COMMIT THESE) ===
+# === Secrets & Credentials (NCT) ===
 .env
 .env.*
 *.key
@@ -9,7 +9,7 @@ secrets/
 credentials/
 *.secret
 
-# === Via Compiler & Build Artifacts ===
+# === Build Artifacts ===
 build/
 target/
 dist/
@@ -69,3 +69,12 @@ debug*.py
 # === Misc ===
 .direnv/
 .envrc
+
+# === Coverage reports ===
+.coverage
+.coverage.*
+htmlcov/
+.xml
+coverage.xml
+*.cover
+cover/

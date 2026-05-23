@@ -1405,13 +1405,13 @@ class QtAdapter:
                 QPainter, QLinearGradient, QColor, QRadialGradient, QFont,
                 QKeySequence, QDoubleValidator, QPixmap, QTransform,
                 QFontDatabase, QIntValidator, QAction, QPalette, QBrush,
-                QPen, QConicalGradient
+                QPen, QConicalGradient, QShortcut
             )
             from PyQt6.QtWidgets import (
                 QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout,
                 QPushButton, QGridLayout, QDialog, QLineEdit, QMessageBox,
                 QHBoxLayout, QTextEdit, QListWidget, QCheckBox, QListWidgetItem,
-                QAbstractItemView, QShortcut, QMenuBar, QGraphicsView,
+                QAbstractItemView, QMenuBar, QGraphicsView,
                 QGraphicsScene, QGraphicsPixmapItem, QFrame, QDesktopWidget,
                 QTabWidget, QScrollArea, QFontDialog, QComboBox, QSpinBox,
                 QSlider, QProgressBar, QToolTip, QTableWidget, QHeaderView,
@@ -1447,7 +1447,20 @@ class QtAdapter:
         self._QtGui = QtGui
         self._QtCore = QtCore
 
-        # Commonly used classes
+        # QtGui classes
+        self.QAction = QAction
+        self.QKeySequence = QKeySequence
+        self.QPainter = QPainter
+        self.QLinearGradient = QLinearGradient
+        self.QRadialGradient = QRadialGradient
+        self.QConicalGradient = QConicalGradient
+        self.QPen = QPen
+        self.QBrush = QBrush
+        self.QTransform = QTransform
+        self.QDoubleValidator = QDoubleValidator
+        self.QIntValidator = QIntValidator
+
+        # QtWidgets classes
         self.QApplication = QApplication
         self.QMainWindow = QMainWindow
         self.QWidget = QWidget
@@ -1471,22 +1484,39 @@ class QtAdapter:
         self.QScrollArea = QScrollArea
         self.QFrame = QFrame
         self.QMenuBar = QMenuBar
+        self.QShortcut = QShortcut
+        self.QGraphicsView = QGraphicsView
+        self.QGraphicsScene = QGraphicsScene
+        self.QGraphicsPixmapItem = QGraphicsPixmapItem
+        self.QDesktopWidget = QDesktopWidget
+        self.QFontDialog = QFontDialog
+        self.QToolTip = QToolTip
+        self.QHeaderView = QHeaderView
+
+        # QtCore classes
+        self.Qt = Qt
+        self.QTimer = QTimer
+        self.QSize = QSize
+        self.QRect = QRect
+        self.QPointF = QPointF
+        self.QEvent = QEvent
+        self.pyqtSignal = pyqtSignal
+        self.QPropertyAnimation = QPropertyAnimation
+        self.QEasingCurve = QEasingCurve
+        self.QParallelAnimationGroup = QParallelAnimationGroup
+
+        # QtGui classes
         self.QFont = QFont
         self.QColor = QColor
         self.QPixmap = QPixmap
         self.QFontDatabase = QFontDatabase
         self.QPalette = QPalette
-        self.Qt = Qt
-        self.QTimer = QTimer
-        self.QPropertyAnimation = QPropertyAnimation
-        self.QEasingCurve = QEasingCurve
+
+        # Effects
         self.QGraphicsDropShadowEffect = QGraphicsDropShadowEffect
         self.QGraphicsOpacityEffect = QGraphicsOpacityEffect
         self.QGraphicsBlurEffect = QGraphicsBlurEffect
         self.QGraphicsColorizeEffect = QGraphicsColorizeEffect
-        self.QLinearGradient = QLinearGradient
-        self.QRadialGradient = QRadialGradient
-        self.QConicalGradient = QConicalGradient
 
     def _setup_enums(self):
         if self._qt_version == QtVersion.PYQT6:

@@ -120,21 +120,27 @@ def _mock_qt_modules():
         _mock_font.setFamily = MagicMock()
         _mock_gui.QFont = MagicMock(return_value=_mock_font)
 
-        # QColor - مهم: یه QColor جعلی می‌سازیم
-        def _make_qcolor(r, g, b, a=255):
-            mock_color = MagicMock()
-            mock_color.red.return_value = r
-            mock_color.green.return_value = g
-            mock_color.blue.return_value = b
-            mock_color.alpha.return_value = a
-            mock_color.name.return_value = f"#{r:02x}{g:02x}{b:02x}"
-            mock_color.getRgb.return_value = (r, g, b, a)
-            mock_color.rgba.return_value = (a << 24) | (r << 16) | (g << 8) | b
-            mock_color.__eq__ = lambda self, other: True
-            mock_color.__hash__ = lambda self: hash((r, g, b, a))
-            return mock_color
+        # QColor - IMPORTANT: Must return a MagicMock instance, not a function
+        # ThemeManager uses QColor in many places and needs it to behave like a class.
+        # We create a callable MagicMock that returns a properly configured mock.
+        def _create_qcolor_factory():
+            """Returns a callable that creates QColor mocks with proper attributes."""
+            def _make_qcolor(r=0, g=0, b=0, a=255):
+                mock_color = MagicMock()
+                mock_color.red.return_value = r
+                mock_color.green.return_value = g
+                mock_color.blue.return_value = b
+                mock_color.alpha.return_value = a
+                mock_color.name.return_value = f"#{r:02x}{g:02x}{b:02x}"
+                mock_color.getRgb.return_value = (r, g, b, a)
+                mock_color.rgba.return_value = (a << 24) | (r << 16) | (g << 8) | b
+                # CRITICAL: Make equality and hashing work for StrEnum comparisons
+                mock_color.__eq__ = lambda self, other: True
+                mock_color.__hash__ = lambda self: hash((r, g, b, a))
+                return mock_color
+            return MagicMock(side_effect=_make_qcolor)
 
-        _mock_gui.QColor = _make_qcolor
+        _mock_gui.QColor = _create_qcolor_factory()
 
         # QFontDatabase
         _mock_font_db = MagicMock()
@@ -217,36 +223,36 @@ def _mock_qt_modules():
         # QGraphicsColorizeEffect
         _mock_widgets.QGraphicsColorizeEffect = MagicMock()
 
-        # Widget Classes
-        _mock_widgets.QMainWindow = MagicMock()
-        _mock_widgets.QWidget = MagicMock()
-        _mock_widgets.QLabel = MagicMock()
-        _mock_widgets.QVBoxLayout = MagicMock()
-        _mock_widgets.QHBoxLayout = MagicMock()
-        _mock_widgets.QGridLayout = MagicMock()
-        _mock_widgets.QPushButton = MagicMock()
-        _mock_widgets.QLineEdit = MagicMock()
-        _mock_widgets.QTextEdit = MagicMock()
-        _mock_widgets.QDialog = MagicMock()
-        _mock_widgets.QMessageBox = MagicMock()
-        _mock_widgets.QListWidget = MagicMock()
-        _mock_widgets.QCheckBox = MagicMock()
-        _mock_widgets.QComboBox = MagicMock()
-        _mock_widgets.QSpinBox = MagicMock()
-        _mock_widgets.QSlider = MagicMock()
-        _mock_widgets.QProgressBar = MagicMock()
-        _mock_widgets.QTableWidget = MagicMock()
-        _mock_widgets.QTabWidget = MagicMock()
-        _mock_widgets.QScrollArea = MagicMock()
-        _mock_widgets.QFrame = MagicMock()
-        _mock_widgets.QMenuBar = MagicMock()
+        # Widget Classes - ALL must be Callable MagicMocks (return MagicMock on instantiation)
+        _mock_widgets.QMainWindow = MagicMock(return_value=MagicMock())
+        _mock_widgets.QWidget = MagicMock(return_value=MagicMock())
+        _mock_widgets.QLabel = MagicMock(return_value=MagicMock())
+        _mock_widgets.QVBoxLayout = MagicMock(return_value=MagicMock())
+        _mock_widgets.QHBoxLayout = MagicMock(return_value=MagicMock())
+        _mock_widgets.QGridLayout = MagicMock(return_value=MagicMock())
+        _mock_widgets.QPushButton = MagicMock(return_value=MagicMock())
+        _mock_widgets.QLineEdit = MagicMock(return_value=MagicMock())
+        _mock_widgets.QTextEdit = MagicMock(return_value=MagicMock())
+        _mock_widgets.QDialog = MagicMock(return_value=MagicMock())
+        _mock_widgets.QMessageBox = MagicMock(return_value=MagicMock())
+        _mock_widgets.QListWidget = MagicMock(return_value=MagicMock())
+        _mock_widgets.QCheckBox = MagicMock(return_value=MagicMock())
+        _mock_widgets.QComboBox = MagicMock(return_value=MagicMock())
+        _mock_widgets.QSpinBox = MagicMock(return_value=MagicMock())
+        _mock_widgets.QSlider = MagicMock(return_value=MagicMock())
+        _mock_widgets.QProgressBar = MagicMock(return_value=MagicMock())
+        _mock_widgets.QTableWidget = MagicMock(return_value=MagicMock())
+        _mock_widgets.QTabWidget = MagicMock(return_value=MagicMock())
+        _mock_widgets.QScrollArea = MagicMock(return_value=MagicMock())
+        _mock_widgets.QFrame = MagicMock(return_value=MagicMock())
+        _mock_widgets.QMenuBar = MagicMock(return_value=MagicMock())
         _mock_widgets.QListWidgetItem = MagicMock()
-        _mock_widgets.QShortcut = MagicMock()
-        _mock_widgets.QGraphicsView = MagicMock()
-        _mock_widgets.QGraphicsScene = MagicMock()
+        _mock_widgets.QShortcut = MagicMock(return_value=MagicMock())
+        _mock_widgets.QGraphicsView = MagicMock(return_value=MagicMock())
+        _mock_widgets.QGraphicsScene = MagicMock(return_value=MagicMock())
         _mock_widgets.QGraphicsPixmapItem = MagicMock()
-        _mock_widgets.QDesktopWidget = MagicMock()
-        _mock_widgets.QFontDialog = MagicMock()
+        _mock_widgets.QDesktopWidget = MagicMock(return_value=MagicMock())
+        _mock_widgets.QFontDialog = MagicMock(return_value=MagicMock())
         _mock_widgets.QToolTip = MagicMock()
         _mock_widgets.QHeaderView = MagicMock()
 
@@ -264,6 +270,11 @@ def _mock_qt_modules():
         _mock_widgets.QAbstractItemView.MultiSelection = 2  # PyQt5 fallback
         _mock_widgets.QAbstractItemView.ExtendedSelection = 3  # PyQt5 fallback
         _mock_widgets.QAbstractItemView.NoSelection = 0  # PyQt5 fallback
+
+        # CRITICAL FIX: SystemDetector mock
+        # SystemDetector methods that return numbers must return actual numbers,
+        # not MagicMocks, because they're used in f-strings and format() calls.
+        # We'll set these via patch in fixtures instead.
 
     # ========================================================================
     # ثبت ماژول‌های Mock در sys.modules
@@ -347,32 +358,33 @@ from MathAssistant.ui.styles import (
 # ============================================================================
 
 # ۳.۱ --- Singleton Reset (autouse) ---
+
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """
-    قبل و بعد از هر تست، Singletonها رو ریست می‌کنه.
-    این کار استقلال کامل تست‌ها رو تضمین می‌کنه.
+    ریست کامل ماژول‌های MathAssistant بین تست‌ها.
+
+    مشکل اصلی: ThemeManager._mode از یه Enum هست که توی یه module
+    دیگه تعریف شده. وقتی ماژول styles.py ریست میشه، Enumها دوباره
+    ساخته میشن و is/== با Enumهای قبلی fail میشه.
+
+    راه‌حل: کل sys.modules رو برای MathAssistant پاک کن. این باعث میشه
+    همه Enumها و Singletonها از نو ساخته بشن و equality درست کار کنه.
     """
-    # --- ذخیره state فعلی ---
-    _old_theme_instance = ThemeManager._instance
-    _old_qt_instance = QtAdapter._instance
+    to_delete = [k for k in sys.modules if k.startswith('MathAssistant')]
+    for k in to_delete:
+        del sys.modules[k]
 
-    # --- ریست کامل ThemeManager ---
-    ThemeManager._instance = None
-    ThemeManager._initialized = False
-    ThemeManager._observers = []
-
-    # --- ریست کامل QtAdapter ---
-    QtAdapter._instance = None
-    QtAdapter._initialized = False
+    if hasattr(QtAdapter, '_instance'):
+        QtAdapter._instance = None
+    if hasattr(QtAdapter, '_initialized'):
+        QtAdapter._initialized = False
 
     yield
 
-    # --- برگردوندن به state قبلی (برای تست‌های integration) ---
-    ThemeManager._instance = _old_theme_instance
-    ThemeManager._initialized = bool(_old_theme_instance)
-    QtAdapter._instance = _old_qt_instance
-    QtAdapter._initialized = bool(_old_qt_instance)
+    to_delete = [k for k in sys.modules if k.startswith('MathAssistant')]
+    for k in to_delete:
+        del sys.modules[k]
 
 
 # ۳.۲ --- ColorPalette Fixtures ---
@@ -451,14 +463,22 @@ def light_dark_palettes(request) -> ColorPalette:
     return PaletteFactory.create(request.param)
 
 
-# ۳.۳ --- ThemeManager Fixtures ---
+# ۳.۳ --- ThemeManager Fixtures (WITH SystemDetector patches) ---
 @pytest.fixture
-def theme_manager() -> ThemeManager:
+def theme_manager():
     """
     ThemeManager تازه و ایزوله برای هر تست.
     به دلیل autouse reset_singletons، هر بار instance جدید می‌گیریم.
+
+    CRITICAL: SystemDetector methods are patched to return real numbers,
+    not MagicMocks, because ThemeManager.get_system_info() uses f-strings
+    that call __format__ on these values.
     """
-    return ThemeManager()
+    with patch.object(SystemDetector, 'get_windows_version', return_value=WindowsVersion.WIN_11), \
+         patch.object(SystemDetector, 'get_dpi_scale', return_value=1.0), \
+         patch.object(SystemDetector, 'get_system_memory_gb', return_value=16.0), \
+         patch.object(SystemDetector, 'get_cpu_count', return_value=8):
+        return ThemeManager()
 
 
 @pytest.fixture
@@ -494,9 +514,13 @@ def theme_manager_high_contrast(theme_manager) -> ThemeManager:
 ])
 def theme_manager_all_modes(request) -> ThemeManager:
     """ThemeManager با تمام تم‌ها - parametrized"""
-    tm = ThemeManager()
-    tm.set_mode(request.param)
-    return tm
+    with patch.object(SystemDetector, 'get_windows_version', return_value=WindowsVersion.WIN_11), \
+         patch.object(SystemDetector, 'get_dpi_scale', return_value=1.0), \
+         patch.object(SystemDetector, 'get_system_memory_gb', return_value=16.0), \
+         patch.object(SystemDetector, 'get_cpu_count', return_value=8):
+        tm = ThemeManager()
+        tm.set_mode(request.param)
+        return tm
 
 
 # ۳.۴ --- Font Fixtures ---
