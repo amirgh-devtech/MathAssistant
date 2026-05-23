@@ -1405,14 +1405,14 @@ class QtAdapter:
                 QPainter, QLinearGradient, QColor, QRadialGradient, QFont,
                 QKeySequence, QDoubleValidator, QPixmap, QTransform,
                 QFontDatabase, QIntValidator, QAction, QPalette, QBrush,
-                QPen, QConicalGradient, QShortcut
+                QPen, QConicalGradient, QShortcut, QScreen
             )
             from PyQt6.QtWidgets import (
                 QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout,
                 QPushButton, QGridLayout, QDialog, QLineEdit, QMessageBox,
                 QHBoxLayout, QTextEdit, QListWidget, QCheckBox, QListWidgetItem,
                 QAbstractItemView, QMenuBar, QGraphicsView,
-                QGraphicsScene, QGraphicsPixmapItem, QFrame, QDesktopWidget,
+                QGraphicsScene, QGraphicsPixmapItem, QFrame,
                 QTabWidget, QScrollArea, QFontDialog, QComboBox, QSpinBox,
                 QSlider, QProgressBar, QToolTip, QTableWidget, QHeaderView,
                 QGraphicsDropShadowEffect, QGraphicsOpacityEffect,
@@ -1488,7 +1488,10 @@ class QtAdapter:
         self.QGraphicsView = QGraphicsView
         self.QGraphicsScene = QGraphicsScene
         self.QGraphicsPixmapItem = QGraphicsPixmapItem
-        self.QDesktopWidget = QDesktopWidget
+        if self._qt_version == QtVersion.PYQT6:
+            self.QDesktopWidget = None
+        else:
+            self.QDesktopWidget = QDesktopWidget
         self.QFontDialog = QFontDialog
         self.QToolTip = QToolTip
         self.QHeaderView = QHeaderView
@@ -1519,38 +1522,180 @@ class QtAdapter:
         self.QGraphicsColorizeEffect = QGraphicsColorizeEffect
 
     def _setup_enums(self):
+        """تنظیم Enumهای مشترک با fallback هوشمند برای PyQt5 و PyQt6"""
+
+        # ========================================================================
+        # Alignment Flags
+        # ========================================================================
         if self._qt_version == QtVersion.PYQT6:
             self.AlignCenter = self.Qt.AlignmentFlag.AlignCenter
             self.AlignRight = self.Qt.AlignmentFlag.AlignRight
             self.AlignLeft = self.Qt.AlignmentFlag.AlignLeft
             self.AlignTop = self.Qt.AlignmentFlag.AlignTop
             self.AlignBottom = self.Qt.AlignmentFlag.AlignBottom
-            self.ItemIsUserCheckable = self.Qt.ItemFlag.ItemIsUserCheckable
-            self.Unchecked = self.Qt.CheckState.Unchecked
-            self.Checked = self.Qt.CheckState.Checked
-            self.PartiallyChecked = self.Qt.CheckState.PartiallyChecked
-            self.NoFrame = self._QtWidgets.QFrame.Shape.NoFrame
-            self.RichText = self.Qt.TextFormat.RichText
-            self.PlainText = self.Qt.TextFormat.PlainText
-            self.MultiSelection = self._QtWidgets.QAbstractItemView.SelectionMode.MultiSelection
-            self.ExtendedSelection = self._QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection
-            self.NoSelection = self._QtWidgets.QAbstractItemView.SelectionMode.NoSelection
         else:
             self.AlignCenter = self.Qt.AlignCenter
             self.AlignRight = self.Qt.AlignRight
             self.AlignLeft = self.Qt.AlignLeft
             self.AlignTop = self.Qt.AlignTop
             self.AlignBottom = self.Qt.AlignBottom
+
+        # ========================================================================
+        # Mouse Buttons
+        # ========================================================================
+        if self._qt_version == QtVersion.PYQT6:
+            self.LeftButton = self.Qt.MouseButton.LeftButton
+            self.RightButton = self.Qt.MouseButton.RightButton
+            self.MiddleButton = self.Qt.MouseButton.MiddleButton
+        else:
+            self.LeftButton = self.Qt.LeftButton
+            self.RightButton = self.Qt.RightButton
+            self.MiddleButton = self.Qt.MiddleButton
+
+        # ========================================================================
+        # Cursor Shapes
+        # ========================================================================
+        if self._qt_version == QtVersion.PYQT6:
+            self.PointingHandCursor = self.Qt.CursorShape.PointingHandCursor
+            self.ArrowCursor = self.Qt.CursorShape.ArrowCursor
+            self.CrossCursor = self.Qt.CursorShape.CrossCursor
+            self.WaitCursor = self.Qt.CursorShape.WaitCursor
+            self.IBeamCursor = self.Qt.CursorShape.IBeamCursor
+            self.SizeVerCursor = self.Qt.CursorShape.SizeVerCursor
+            self.SizeHorCursor = self.Qt.CursorShape.SizeHorCursor
+            self.SizeBDiagCursor = self.Qt.CursorShape.SizeBDiagCursor
+            self.SizeFDiagCursor = self.Qt.CursorShape.SizeFDiagCursor
+            self.SizeAllCursor = self.Qt.CursorShape.SizeAllCursor
+            self.BlankCursor = self.Qt.CursorShape.BlankCursor
+        else:
+            self.PointingHandCursor = self.Qt.PointingHandCursor
+            self.ArrowCursor = self.Qt.ArrowCursor
+            self.CrossCursor = self.Qt.CrossCursor
+            self.WaitCursor = self.Qt.WaitCursor
+            self.IBeamCursor = self.Qt.IBeamCursor
+            self.SizeVerCursor = self.Qt.SizeVerCursor
+            self.SizeHorCursor = self.Qt.SizeHorCursor
+            self.SizeBDiagCursor = self.Qt.SizeBDiagCursor
+            self.SizeFDiagCursor = self.Qt.SizeFDiagCursor
+            self.SizeAllCursor = self.Qt.SizeAllCursor
+            self.BlankCursor = self.Qt.BlankCursor
+
+        # ========================================================================
+        # Text Format
+        # ========================================================================
+        if self._qt_version == QtVersion.PYQT6:
+            self.RichText = self.Qt.TextFormat.RichText
+            self.PlainText = self.Qt.TextFormat.PlainText
+            self.MarkdownText = self.Qt.TextFormat.MarkdownText
+        else:
+            self.RichText = self.Qt.RichText
+            self.PlainText = self.Qt.PlainText
+            try:
+                self.MarkdownText = self.Qt.MarkdownText
+            except AttributeError:
+                self.MarkdownText = self.Qt.RichText  # fallback
+
+        # ========================================================================
+        # Item Flags
+        # ========================================================================
+        if self._qt_version == QtVersion.PYQT6:
+            self.ItemIsUserCheckable = self.Qt.ItemFlag.ItemIsUserCheckable
+            self.ItemIsSelectable = self.Qt.ItemFlag.ItemIsSelectable
+            self.ItemIsEditable = self.Qt.ItemFlag.ItemIsEditable
+            self.ItemIsEnabled = self.Qt.ItemFlag.ItemIsEnabled
+        else:
             self.ItemIsUserCheckable = self.Qt.ItemIsUserCheckable
+            self.ItemIsSelectable = self.Qt.ItemIsSelectable
+            self.ItemIsEditable = self.Qt.ItemIsEditable
+            self.ItemIsEnabled = self.Qt.ItemIsEnabled
+
+        # ========================================================================
+        # Check States
+        # ========================================================================
+        if self._qt_version == QtVersion.PYQT6:
+            self.Unchecked = self.Qt.CheckState.Unchecked
+            self.Checked = self.Qt.CheckState.Checked
+            self.PartiallyChecked = self.Qt.CheckState.PartiallyChecked
+        else:
             self.Unchecked = self.Qt.Unchecked
             self.Checked = self.Qt.Checked
             self.PartiallyChecked = self.Qt.PartiallyChecked
+
+        # ========================================================================
+        # Frame Shape
+        # ========================================================================
+        if self._qt_version == QtVersion.PYQT6:
+            self.NoFrame = self._QtWidgets.QFrame.Shape.NoFrame
+        else:
             self.NoFrame = self._QtWidgets.QFrame.NoFrame
-            self.RichText = self.Qt.RichText
-            self.PlainText = self.Qt.PlainText
+
+        # ========================================================================
+        # Selection Modes
+        # ========================================================================
+        if self._qt_version == QtVersion.PYQT6:
+            self.MultiSelection = self._QtWidgets.QAbstractItemView.SelectionMode.MultiSelection
+            self.ExtendedSelection = self._QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection
+            self.NoSelection = self._QtWidgets.QAbstractItemView.SelectionMode.NoSelection
+            self.SingleSelection = self._QtWidgets.QAbstractItemView.SelectionMode.SingleSelection
+        else:
             self.MultiSelection = self._QtWidgets.QAbstractItemView.MultiSelection
             self.ExtendedSelection = self._QtWidgets.QAbstractItemView.ExtendedSelection
             self.NoSelection = self._QtWidgets.QAbstractItemView.NoSelection
+            self.SingleSelection = self._QtWidgets.QAbstractItemView.SingleSelection
+
+        # ========================================================================
+        # Window States
+        # ========================================================================
+        if self._qt_version == QtVersion.PYQT6:
+            self.WindowNoState = self.Qt.WindowState.WindowNoState
+            self.WindowMinimized = self.Qt.WindowState.WindowMinimized
+            self.WindowMaximized = self.Qt.WindowState.WindowMaximized
+            self.WindowFullScreen = self.Qt.WindowState.WindowFullScreen
+        else:
+            self.WindowNoState = self.Qt.WindowNoState
+            self.WindowMinimized = self.Qt.WindowMinimized
+            self.WindowMaximized = self.Qt.WindowMaximized
+            self.WindowFullScreen = self.Qt.WindowFullScreen
+
+        # ========================================================================
+        # Keyboard Modifiers
+        # ========================================================================
+        if self._qt_version == QtVersion.PYQT6:
+            self.NoModifier = self.Qt.KeyboardModifier.NoModifier
+            self.ShiftModifier = self.Qt.KeyboardModifier.ShiftModifier
+            self.ControlModifier = self.Qt.KeyboardModifier.ControlModifier
+            self.AltModifier = self.Qt.KeyboardModifier.AltModifier
+        else:
+            self.NoModifier = self.Qt.NoModifier
+            self.ShiftModifier = self.Qt.ShiftModifier
+            self.ControlModifier = self.Qt.ControlModifier
+            self.AltModifier = self.Qt.AltModifier
+
+        # ========================================================================
+        # Focus Policy
+        # ========================================================================
+        if self._qt_version == QtVersion.PYQT6:
+            self.NoFocus = self.Qt.FocusPolicy.NoFocus
+            self.TabFocus = self.Qt.FocusPolicy.TabFocus
+            self.ClickFocus = self.Qt.FocusPolicy.ClickFocus
+            self.StrongFocus = self.Qt.FocusPolicy.StrongFocus
+            self.WheelFocus = self.Qt.FocusPolicy.WheelFocus
+        else:
+            self.NoFocus = self.Qt.NoFocus
+            self.TabFocus = self.Qt.TabFocus
+            self.ClickFocus = self.Qt.ClickFocus
+            self.StrongFocus = self.Qt.StrongFocus
+            self.WheelFocus = self.Qt.WheelFocus
+
+        # ========================================================================
+        # Orientation
+        # ========================================================================
+        if self._qt_version == QtVersion.PYQT6:
+            self.Horizontal = self.Qt.Orientation.Horizontal
+            self.Vertical = self.Qt.Orientation.Vertical
+        else:
+            self.Horizontal = self.Qt.Horizontal
+            self.Vertical = self.Qt.Vertical
 
     def _setup_high_dpi(self):
         if self._qt_version != QtVersion.PYQT6:

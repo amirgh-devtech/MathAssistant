@@ -148,6 +148,19 @@ class AppLauncherProtocol(Protocol):
 # ============================================================================
 # Error Handling Decorator
 # ============================================================================
+def _show_message(self, icon, title, text):
+    msg = QMessageBox(self)
+    msg.setIcon(icon)
+    msg.setWindowTitle(title)
+    msg.setText(text)
+    try:
+        msg.setStyleSheet(self._theme.get_message_box_style())
+    except Exception:
+        pass
+    try:
+        msg.exec()
+    except AttributeError:
+        msg.exec_()
 
 def show_error_on_failure(func: Callable) -> Callable:
     """
@@ -156,6 +169,10 @@ def show_error_on_failure(func: Callable) -> Callable:
     تمام Exceptionهای پیش‌بینی نشده را catch کرده و
     به کاربر نمایش می‌دهد بدون اینکه برنامه crash کند.
     """
+def show_error_on_failure(func: Callable) -> Callable:
+    """
+    Decorator برای نمایش خطاهای غیرمنتظره در QMessageBox.
+    """
     @wraps(func)
     def wrapper(self, *args, **kwargs):
         try:
@@ -163,11 +180,40 @@ def show_error_on_failure(func: Callable) -> Callable:
         except Exception as e:
             logger.exception(f"Error in {func.__name__}: {e}")
             try:
-                QMessageBox.critical(
-                    self, "خطای غیرمنتظره",
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Icon.Critical)
+                msg.setWindowTitle("خطای غیرمنتظره")
+                msg.setText(
                     f"متأسفانه خطایی رخ داد:\n\n{str(e)}\n\n"
                     f"لطفاً این خطا را به تیم توسعه گزارش دهید."
                 )
+
+                # Style از Theme
+                if hasattr(self, '_theme'):
+                    msg.setStyleSheet(f"""
+                        QMessageBox {{
+                            background-color: {self._theme.palette.background};
+                            color: {self._theme.palette.text_primary};
+                            font-family: 'Arial';
+                            font-size: 10pt;
+                        }}
+                        QLabel {{
+                            color: {self._theme.palette.text_primary};
+                        }}
+                        QPushButton {{
+                            background-color: {self._theme.palette.primary};
+                            color: white;
+                            border-radius: 6px;
+                            padding: 6px 20px;
+                            min-width: 80px;
+                            font-family: 'Arial';
+                        }}
+                        QPushButton:hover {{
+                            background-color: {self._theme.palette.primary_dark};
+                        }}
+                    """)
+
+                msg.exec()
             except Exception:
                 pass
     return wrapper
@@ -292,7 +338,10 @@ class GradientWidget(QWidget):
     def paintEvent(self, event) -> None:
         """رسم گرادیانت و rippleها."""
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)  # PyQt6
+        except AttributeError:
+            painter.setRenderHint(QPainter.Antialiasing)  # PyQt5 fallback
         painter.setClipRect(event.rect())
 
         angle_rad = math.radians(self._gradient_angle)
@@ -335,7 +384,7 @@ class GradientWidget(QWidget):
 
     def mousePressEvent(self, event) -> None:
         """ثبت کلیک برای ripple effect."""
-        if event.button() == Qt.LeftButton:
+        if event.button() == _adapter.LeftButton:
             self._ripples.append((
                 float(event.pos().x()),
                 float(event.pos().y()),
@@ -476,8 +525,9 @@ class MenuManager:
         self._theme = theme_provider or default_theme
 
     def create_menus(self, callbacks: Dict[str, Callable]) -> None:
-        """ایجاد تمام منوها."""
+        """ایجاد تمام منوها.""" """ایجاد تمام منوها."""
         menubar = self._parent.menuBar()
+
         menubar.setStyleSheet(self._theme.get_menu_bar_style())
 
         self._create_file_menu(menubar, callbacks)
@@ -489,7 +539,6 @@ class MenuManager:
     ) -> None:
         """منوی فایل."""
         file_menu = menubar.addMenu("📁 &فایل")
-
         items = [
             ("🤖 اجرای دستیار هوش مصنوعی", callbacks.get('ai_chatbot'), "Ctrl+T"),
             ("🔢 باز کردن ماشین حساب", callbacks.get('calculator'), "Ctrl+C"),
@@ -501,14 +550,13 @@ class MenuManager:
             ("", None, None),
             ("🚪 خروج", self._parent.close, "Ctrl+Q"),
         ]
-
         for text, callback, shortcut in items:
             if not text:
                 file_menu.addSeparator()
                 continue
             action = QAction(text, self._parent)
             if callback:
-                action.triggered.connect(callback)
+                action.triggered.connect(lambda checked=False, cb=callback: cb())
             if shortcut:
                 action.setShortcut(QKeySequence(shortcut))
             file_menu.addAction(action)
@@ -538,11 +586,10 @@ class MenuManager:
     ) -> None:
         """منوی ابزارها."""
         tools_menu = menubar.addMenu("🔧 &ابزارها")
-
         report_action = QAction("📊 گزارش سیستم", self._parent)
         callback = callbacks.get('system_report')
         if callback:
-            report_action.triggered.connect(callback)
+            report_action.triggered.connect(lambda checked=False, cb=callback: cb())
         tools_menu.addAction(report_action)
 
     @staticmethod
@@ -592,11 +639,152 @@ class MainWindow(QMainWindow):
 
         logger.info("MainWindow initialized (v4.0.0)")
 
+        self._apply_dark_menu_style()
+
+    def _apply_dark_menu_style(self):
+        """Force dark menu with B Nazanin font - Bold & Larger"""
+        menubar = self.menuBar()
+        statusbar = self.statusBar()
+
+        menubar.setStyleSheet("")
+        statusbar.setStyleSheet("")
+
+        menubar.setStyleSheet("""
+            QMenuBar {
+                background-color: #000000 !important;
+                color: #FFFFFF !important;
+                border-bottom: 1px solid #1A1A1A;
+                font-family: 'B Nazanin' !important;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QMenuBar::item {
+                background-color: #000000 !important;
+                color: #FFFFFF !important;
+                padding: 8px 18px;
+                font-family: 'B Nazanin' !important;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QMenuBar::item:selected {
+                background-color: #333333 !important;
+                color: #FFFFFF !important;
+            }
+        """)
+
+        statusbar.setStyleSheet("""
+            QStatusBar {
+                background-color: #000000 !important;
+                color: #AAAAAA !important;
+                border-top: 1px solid #1A1A1A;
+                font-family: 'Arial';
+                font-size: 12px;
+                font-weight: bold;
+            }
+        """)
+
+        for action in menubar.actions():
+            menu = action.menu()
+            if menu:
+                menu.setStyleSheet("""
+                    QMenu {
+                        background-color: #0A0A0A !important;
+                        color: #FFFFFF !important;
+                        border: 1px solid #333333;
+                        font-family: 'B Nazanin' !important;
+                        font-size: 14px;
+                        font-weight: bold;
+                    }
+                    QMenu::item {
+                        background-color: #0A0A0A !important;
+                        color: #FFFFFF !important;
+                        padding: 10px 36px 10px 18px;
+                        font-family: 'B Nazanin' !important;
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                    QMenu::item:selected {
+                        background-color: #333333 !important;
+                        color: #FFFFFF !important;
+                    }
+                """)
+
     def _init_window(self) -> None:
         self.setWindowTitle(self.WINDOW_TITLE)
         self.setFont(self._theme.get_app_font())
         self._apply_window_size()
         self.setMinimumSize(800, 600)
+
+        # ============================================================
+        # Dark MenuBar & StatusBar - Black BG, White Text, Dark Gray Hover
+        # ============================================================
+
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #000000;
+            }
+
+            QMenuBar {
+                background-color: #000000;
+                color: #FFFFFF;
+                padding: 4px 6px;
+                border-bottom: 1px solid #1A1A1A;
+                font-size: 13px;
+            }
+
+            QMenuBar::item {
+                background-color: #000000;
+                color: #FFFFFF;
+                padding: 6px 14px;
+                margin: 1px 2px;
+                border-radius: 4px;
+            }
+
+            QMenuBar::item:selected {
+                background-color: #2A2A2A;
+                color: #FFFFFF;
+            }
+
+            QMenu {
+                background-color: #0A0A0A;
+                color: #FFFFFF;
+                border: 1px solid #2A2A2A;
+                border-radius: 6px;
+                padding: 4px;
+            }
+
+            QMenu::item {
+                background-color: #0A0A0A;
+                color: #FFFFFF;
+                padding: 8px 36px 8px 18px;
+                margin: 1px 4px;
+                border-radius: 3px;
+            }
+
+            QMenu::item:selected {
+                background-color: #2A2A2A;
+                color: #FFFFFF;
+            }
+
+            QMenu::separator {
+                height: 1px;
+                background-color: #1A1A1A;
+                margin: 3px 8px;
+            }
+
+            QStatusBar {
+                background-color: #000000;
+                color: #999999;
+                padding: 2px 10px;
+                border-top: 1px solid #1A1A1A;
+                font-size: 11px;
+            }
+
+            QStatusBar QLabel {
+                color: #AAAAAA;
+                background-color: transparent;
+            }
+        """)
 
     def _apply_window_size(self) -> None:
         try:
@@ -639,11 +827,11 @@ class MainWindow(QMainWindow):
         version_label.setStyleSheet(
             "color: rgba(255, 255, 255, 180); margin-bottom: 20px;"
         )
-        container_layout.addWidget(version_label)
+        # container_layout.addWidget(version_label)
 
         self._setup_buttons(container_layout)
 
-    def _setup_buttons(self, layout: QVBoxLayout) -> None:
+    def _setup_buttons(self, layout):
         button_grid = QGridLayout()
         button_grid.setContentsMargins(20, 20, 20, 20)
         button_grid.setSpacing(12)
@@ -665,12 +853,16 @@ class MainWindow(QMainWindow):
 
         for text, callback, shortcut, tooltip, row, col, rs, cs in buttons_data:
             btn = QPushButton(text)
-            btn.clicked.connect(callback)
+            btn.clicked.connect(lambda checked, cb=callback: cb())
             btn.setToolTip(f"{tooltip}\nمیانبر: {shortcut}")
-            btn.setCursor(Qt.PointingHandCursor)
+            btn.setCursor(_adapter.PointingHandCursor)
+
             btn.setStyleSheet(
                 self._theme.get_button_style("primary", "large", full_width=True)
             )
+
+            btn.setFont(self._theme.get_font(size=14, bold=True))
+
             button_grid.addWidget(btn, row, col, rs, cs)
 
         layout.addLayout(button_grid)
@@ -687,20 +879,25 @@ class MainWindow(QMainWindow):
         }
         self._menu_manager.create_menus(callbacks)
 
-    def _create_status_bar(self) -> None:
+    def _create_status_bar(self):
         status = self.statusBar()
+        font = QFont("Arial", 10)
+        status.setFont(font)
+
         try:
             status.setStyleSheet(self._theme.get_status_bar_style())
         except Exception:
             pass
+
         try:
             info = self._theme.get_system_info()
             status.showMessage(
                 f"🖥️ {info['os']} | 🐍 Python {info['python']} | "
-                f"🎨 {info['theme']} | 🧵 {info['qt_version']}"
+                f"🎨 {info['theme']} | 🧵 {info['qt_version']}",
+                12000
             )
         except Exception:
-            status.showMessage("Math Assistant")
+            status.showMessage("Welcome to Math Assistant!", 0)
 
     def _setup_shortcuts(self) -> None:
         QShortcut(QKeySequence("F11"), self).activated.connect(
@@ -711,11 +908,33 @@ class MainWindow(QMainWindow):
             lambda: self.showNormal() if self.isFullScreen() else None
         )
 
+    def _rebuild_buttons(self) -> None:
+        """بازسازی کامل دکمه‌ها با تم جدید."""
+        container_layout = self._gradient.container.layout()
+
+        for i in reversed(range(container_layout.count())):
+            item = container_layout.itemAt(i)
+            if item.layout() and isinstance(item.layout(), QGridLayout):
+                grid = item.layout()
+                while grid.count():
+                    child = grid.takeAt(0)
+                    w = child.widget()
+                    if w is not None:
+                        w.setParent(None)
+                        w.deleteLater()
+                container_layout.removeItem(item)
+                break
+
+        self._setup_buttons(container_layout)
+
     def _on_theme_changed(self, mode: ThemeMode) -> None:
+        """واکنش به تغییر تم."""
         try:
             self._create_status_bar()
-        except Exception:
-            pass
+            self._rebuild_buttons()
+            self._apply_dark_menu_style()
+        except Exception as e:
+            logger.warning(f"Failed to update theme: {e}")
 
     # ========================================================================
     # Window Openers
@@ -810,12 +1029,24 @@ class MainWindow(QMainWindow):
 
         msg = QMessageBox(self)
         msg.setWindowTitle("درباره برنامه")
-        msg.setIcon(QMessageBox.Information)
+        try:
+            msg.setIcon(QMessageBox.Icon.Information)
+        except AttributeError:
+            msg.setIcon(QMessageBox.Information)
         msg.setTextFormat(RichText)
         msg.setMinimumSize(450, 400)
         msg.setText(about_text)
-        msg.setStyleSheet(self._theme.get_message_box_style())
-        msg.exec_()
+
+        # Style از theme
+        try:
+            msg.setStyleSheet(self._theme.get_message_box_style())
+        except Exception:
+            pass
+
+        try:
+            msg.exec()
+        except AttributeError:
+            msg.exec_()
 
     @show_error_on_failure
     def _show_system_report(self) -> None:
@@ -825,7 +1056,7 @@ class MainWindow(QMainWindow):
 
         msg = QMessageBox(self)
         msg.setWindowTitle("گزارش سیستم")
-        msg.setIcon(QMessageBox.Information)
+        msg.setIcon(QMessageBox.Icon.Information)
         msg.setDetailedText(report_text)
         msg.setText(
             f"سیستم‌عامل: {report['os']}\n"
@@ -836,7 +1067,7 @@ class MainWindow(QMainWindow):
             f"{len(report['available_apps'])}"
         )
         msg.setStyleSheet(self._theme.get_message_box_style())
-        msg.exec_()
+        msg.exec()
 
     # ========================================================================
     # Window Events
