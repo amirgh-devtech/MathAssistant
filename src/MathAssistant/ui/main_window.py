@@ -461,10 +461,7 @@ class ChildWindowManager:
                 # DirectConnection برای پاکسازی فوری
                 if hasattr(window, 'destroyed'):
                     window.destroyed.connect(
-                        lambda obj=None, k=key: self._on_window_destroyed(k),
-                        Qt.ConnectionType.DirectConnection
-                        if hasattr(Qt, 'ConnectionType')
-                        else Qt.DirectConnection
+                        lambda obj=None, k=key: self._on_window_destroyed(k)
                     )
 
                 window.show()
@@ -971,6 +968,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self, "خطا",
                 f"فایل Math-bot.py یافت نشد.\nمسیر: {script_path}"
+                f"\nمتاسفانه این سرویس به دلیل عدم دسترسی به اینترنت بین‌الملل در دسترس نمی‌باشد."
+                f"\nباتشکر از شکیبایی شما..."
             )
             return
 

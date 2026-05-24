@@ -1416,7 +1416,7 @@ class QtAdapter:
                 QTabWidget, QScrollArea, QFontDialog, QComboBox, QSpinBox,
                 QSlider, QProgressBar, QToolTip, QTableWidget, QHeaderView,
                 QGraphicsDropShadowEffect, QGraphicsOpacityEffect,
-                QGraphicsBlurEffect, QGraphicsColorizeEffect
+                QGraphicsBlurEffect, QGraphicsColorizeEffect, QStackedWidget
             )
         else:
             from PyQt5 import QtWidgets, QtGui, QtCore
@@ -1439,7 +1439,7 @@ class QtAdapter:
                 QTabWidget, QScrollArea, QFontDialog, QComboBox, QSpinBox,
                 QSlider, QProgressBar, QToolTip, QTableWidget, QHeaderView,
                 QGraphicsDropShadowEffect, QGraphicsOpacityEffect,
-                QGraphicsBlurEffect, QGraphicsColorizeEffect
+                QGraphicsBlurEffect, QGraphicsColorizeEffect, QStackedWidget
             )
 
         # Store module references
@@ -1495,6 +1495,7 @@ class QtAdapter:
         self.QFontDialog = QFontDialog
         self.QToolTip = QToolTip
         self.QHeaderView = QHeaderView
+        self.QStackedWidget = QStackedWidget
 
         # QtCore classes
         self.Qt = Qt
