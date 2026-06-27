@@ -98,12 +98,12 @@ def print_banner():
 ╔══════════════════════════════════════════════════════════════╗
 ║         📐 MathAssistant v4.0 - Production Ready             ║
 ╠══════════════════════════════════════════════════════════════╣
-║  🖥️  OS       : {info['os']:<44} ║
-║  🐍 Python   : {info['python']:<44} ║
-║  🧵 Qt       : {info['qt_version']:<44} ║
-║  🎨 Theme    : {info['theme']:<44} ║
-║  💾 RAM      : {info.get('ram_gb', 'N/A'):<44} ║
-║  📐 DPI      : {info.get('dpi', 'N/A'):<44} ║
+║  🖥️  OS       : {info['os']:<44}  ║
+║  🐍 Python   : {info['python']:<44}  ║
+║  🧵 Qt       : {info['qt_version']:<44}  ║
+║  🎨 Theme    : {info['theme']:<44}  ║
+║  💾 RAM      : {info.get('ram_gb', 'N/A'):<44}  ║
+║  📐 DPI      : {info.get('dpi', 'N/A'):<44}  ║
 ╚══════════════════════════════════════════════════════════════╝
 """
     print(banner)
