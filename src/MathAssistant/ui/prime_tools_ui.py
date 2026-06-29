@@ -4,13 +4,15 @@ Prime Tools Suite - ابزارهای پیشرفته اعداد اول
 طراحی نئومورفیسم/گلس‌مورفیسم کامل | کنتراست WCAG AAA+ | فونت تفکیک‌شده
 
 Author: AmirMohammad Ghasemzadeh
-Version: 9.0.0 - Production-Ready Edition
+Version: 9.1.0 - Thread-Safe Production Edition
 """
 
 import logging
 import re
-from typing import Optional, List, Tuple, Type, Dict, Any
+from typing import Optional, List, Tuple, Type, Dict, Any, Callable
 from enum import Enum, auto
+from threading import Event
+from dataclasses import dataclass
 
 from PyQt6.QtCore import (
     Qt, QTimer, QSize, pyqtSignal, QRunnable, QThreadPool,
@@ -26,7 +28,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QTextEdit, QScrollArea, QTabWidget, QTabBar,
     QMenuBar, QMenu, QMessageBox, QApplication, QFrame,
     QSizePolicy, QGraphicsDropShadowEffect, QStyleFactory,
-    QProgressBar, QTableView, QHeaderView
+    QProgressBar
 )
 
 from ..core.math_engine import MathEngine
@@ -37,17 +39,63 @@ logger = logging.getLogger(__name__)
 # Constants - Optimized for Production
 # ============================================================================
 QT_MAX_INT32: int = 2_147_483_647
-# محدودیت بهینه بر اساس تست عملی با 16GB RAM
 SIEVE_MAX_RANGE: int = 5_000_000
 RESULT_CHUNK_SIZE: int = 100
 RESULT_CLEAR_TIMEOUT_MS: int = 25_000
 PRIMALITY_MAX: int = 10 ** 15
-# حذف محدودیت نمایش برای نمایش کامل نتایج
-# MAX_RESULT_DISPLAY_LENGTH removed - all results will be shown
+
+# آستانه‌های حافظه برای هشدار (تخمین تقریبی)
+MEMORY_WARNING_THRESHOLD: int = 500_000   # تعداد نتایج برای هشدار
+MEMORY_CRITICAL_THRESHOLD: int = 1_000_000  # تعداد نتایج بحرانی
 
 
 # ============================================================================
-# Theme System - Production Ready
+# Data Classes for Results
+# ============================================================================
+
+@dataclass
+class CalculationResult:
+    """نتیجه کامل یک محاسبه شامل متادیتا."""
+    data: Any
+    metadata: Dict[str, Any] = None
+
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
+
+
+# ============================================================================
+# Cancellation Token System
+# ============================================================================
+
+class CancellationToken:
+    """توکن لغو عملیات برای کنترل thread-safe محاسبات."""
+
+    def __init__(self):
+        self._event = Event()
+        self._cancelled = False
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self._cancelled
+
+    def cancel(self):
+        """لغو عملیات."""
+        self._cancelled = True
+        self._event.set()
+
+    def wait(self, timeout: float = None) -> bool:
+        """منتظر ماندن برای سیگنال لغو."""
+        return self._event.wait(timeout)
+
+    def reset(self):
+        """بازنشانی توکن برای استفاده مجدد."""
+        self._cancelled = False
+        self._event.clear()
+
+
+# ============================================================================
+# Theme System - Production Ready (Fixed RGBA)
 # ============================================================================
 
 class ThemeMode(Enum):
@@ -94,9 +142,10 @@ class NeumorphicTheme:
         'border_input': '#0f1428',
         'border_focus': '#8b7cf7',
         'border_card': '#181e38',
-        'shadow_light': 'rgba(25, 30, 55, 180)',
-        'shadow_dark': 'rgba(3, 5, 12, 200)',
-        'shadow_card': 'rgba(0, 0, 0, 60)',
+        # Fixed: RGBA with proper alpha values (0-1 range)
+        'shadow_light': 'rgba(25, 30, 55, 0.71)',
+        'shadow_dark': 'rgba(3, 5, 12, 0.78)',
+        'shadow_card': 'rgba(0, 0, 0, 0.24)',
         'glass_border': 'rgba(255, 255, 255, 0.04)',
         'glass_highlight': 'rgba(255, 255, 255, 0.03)',
         'scrollbar_bg': 'transparent',
@@ -112,6 +161,8 @@ class NeumorphicTheme:
         'tab_shadow_dark': '#060810',
         'hover_overlay': 'rgba(139, 124, 247, 0.1)',
         'pressed_overlay': 'rgba(139, 124, 247, 0.2)',
+        'cancel_btn_bg': '#dc2626',
+        'cancel_btn_hover': '#ef4444',
     }
 
     LIGHT = {
@@ -150,9 +201,10 @@ class NeumorphicTheme:
         'border_input': '#d5d8e0',
         'border_focus': '#6d5ed8',
         'border_card': '#e0e3ea',
-        'shadow_light': 'rgba(255, 255, 255, 200)',
-        'shadow_dark': 'rgba(170, 178, 190, 180)',
-        'shadow_card': 'rgba(0, 0, 0, 25)',
+        # Fixed: RGBA with proper alpha values (0-1 range)
+        'shadow_light': 'rgba(255, 255, 255, 0.78)',
+        'shadow_dark': 'rgba(170, 178, 190, 0.71)',
+        'shadow_card': 'rgba(0, 0, 0, 0.10)',
         'glass_border': 'rgba(255, 255, 255, 0.6)',
         'glass_highlight': 'rgba(255, 255, 255, 0.4)',
         'scrollbar_bg': 'transparent',
@@ -168,6 +220,8 @@ class NeumorphicTheme:
         'tab_shadow_dark': '#c8ccd6',
         'hover_overlay': 'rgba(109, 94, 216, 0.08)',
         'pressed_overlay': 'rgba(109, 94, 216, 0.15)',
+        'cancel_btn_bg': '#dc2626',
+        'cancel_btn_hover': '#ef4444',
     }
 
     def __init__(self, mode: ThemeMode = ThemeMode.DARK):
@@ -275,6 +329,18 @@ class NeumorphicTheme:
         }}
         QPushButton#accentBtn:pressed {{
             background-color: {c['accent_pressed']};
+        }}
+        QPushButton#cancelBtn {{
+            background-color: {c['cancel_btn_bg']};
+            color: white;
+            border: none;
+            font-size: 14px;
+            padding: 8px 20px;
+            border-radius: 10px;
+            font-weight: bold;
+        }}
+        QPushButton#cancelBtn:hover {{
+            background-color: {c['cancel_btn_hover']};
         }}
         QPushButton#iconBtn {{
             background-color: transparent;
@@ -402,6 +468,14 @@ class NeumorphicTheme:
             background-color: {c['accent']};
             border-radius: 8px;
         }}
+        QLabel#memoryWarning {{
+            color: {c['warning_text']};
+            background-color: {c['warning_bg']};
+            border: 1px solid {c['warning']};
+            border-radius: 8px;
+            padding: 8px;
+            font-weight: bold;
+        }}
         """
 
 
@@ -471,30 +545,57 @@ class FontSystem:
 
 
 # ============================================================================
-# Threading System
+# Thread-Safe Calculation System
 # ============================================================================
 
 class CalculationSignals(QObject):
-    finished = pyqtSignal(object)
+    """سیگنال‌های Thread-Safe برای ارتباط worker با UI."""
+    finished = pyqtSignal(object)      # CalculationResult
     error = pyqtSignal(str)
+    progress = pyqtSignal(int)
 
 
 class CalculationWorker(QRunnable):
-    def __init__(self, fn, *args, **kwargs):
+    """
+    Worker Thread با پشتیبانی از CancellationToken.
+    """
+
+    def __init__(self, fn: Callable, *args, cancellation_token: Optional[CancellationToken] = None, **kwargs):
         super().__init__()
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
+        self.cancellation_token = cancellation_token or CancellationToken()
         self.signals = CalculationSignals()
+        self._is_running = False
 
     @pyqtSlot()
     def run(self):
+        """اجرای محاسبه با پشتیبانی از لغو."""
+        if self.cancellation_token.is_cancelled:
+            return
+
+        self._is_running = True
         try:
+            # ارسال cancellation_token به تابع اگر آن را پشتیبانی کند
+            if 'cancellation_token' in self.fn.__code__.co_varnames:
+                self.kwargs['cancellation_token'] = self.cancellation_token
+
             result = self.fn(*self.args, **self.kwargs)
-            self.signals.finished.emit(result)
+
+            if not self.cancellation_token.is_cancelled:
+                self.signals.finished.emit(result)
         except Exception as e:
-            logger.exception("CalculationWorker failed")
-            self.signals.error.emit(str(e))
+            if not self.cancellation_token.is_cancelled:
+                logger.exception("CalculationWorker failed")
+                self.signals.error.emit(str(e))
+        finally:
+            self._is_running = False
+
+    def cancel(self):
+        """درخواست لغو عملیات."""
+        if self._is_running:
+            self.cancellation_token.cancel()
 
 
 # ============================================================================
@@ -554,10 +655,12 @@ class NeumorphicResultLabel(QLabel):
 
 
 # ============================================================================
-# Optimized Base Tab
+# Thread-Safe Base Tab with Memory Management
 # ============================================================================
 
 class BasePrimeTab(QWidget):
+    """کلاس پایه با مدیریت پیشرفته Threading، حافظه و لغو عملیات."""
+
     def __init__(self, engine: MathEngine, theme: NeumorphicTheme, parent=None):
         super().__init__(parent)
         self.engine = engine
@@ -565,7 +668,15 @@ class BasePrimeTab(QWidget):
         self.setFont(FontSystem.persian_subtitle())
         self._number_widgets: List[QWidget] = []
         self._progress_bar: Optional[QProgressBar] = None
+        self._cancel_btn: Optional[QPushButton] = None
+        self._memory_warning: Optional[QLabel] = None
         self._thread_pool = QThreadPool.globalInstance()
+
+        # Thread-Safe state management
+        self._is_calculating: bool = False
+        self._active_worker: Optional[CalculationWorker] = None
+        self._cancellation_token: Optional[CancellationToken] = None
+
         self._build_ui()
 
     def _build_ui(self):
@@ -620,42 +731,143 @@ class BasePrimeTab(QWidget):
         self._register_number_widget(lbl)
         return lbl
 
-    def _create_progress_bar(self) -> QProgressBar:
-        pb = QProgressBar()
-        pb.setRange(0, 0)  # Indeterminate mode
-        pb.setVisible(False)
-        return pb
+    def _create_progress_with_cancel(self) -> QHBoxLayout:
+        """ایجاد نوار پیشرفت با دکمه لغو."""
+        layout = QHBoxLayout()
+        layout.setSpacing(8)
+
+        self._progress_bar = QProgressBar()
+        self._progress_bar.setRange(0, 0)  # Indeterminate
+        self._progress_bar.setVisible(False)
+        layout.addWidget(self._progress_bar, 1)
+
+        self._cancel_btn = QPushButton("✕ لغو")
+        self._cancel_btn.setObjectName("cancelBtn")
+        self._cancel_btn.setVisible(False)
+        self._cancel_btn.setFont(FontSystem.persian_button())
+        self._cancel_btn.clicked.connect(self._cancel_calculation)
+        layout.addWidget(self._cancel_btn)
+
+        return layout
+
+    def _create_memory_warning(self) -> QLabel:
+        """ایجاد لیبل هشدار حافظه."""
+        lbl = QLabel()
+        lbl.setObjectName("memoryWarning")
+        lbl.setVisible(False)
+        lbl.setWordWrap(True)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        return lbl
 
     def _show_error(self, msg: str):
         QMessageBox.warning(self, "⚠️ خطا", msg)
 
-    def _start_calculation(self, fn, *args, finished_callback=None):
+    def _check_memory_threshold(self, estimated_count: int) -> bool:
+        """
+        بررسی آستانه حافظه و نمایش هشدار.
+        Returns True اگر کاربر تأیید کند.
+        """
+        if estimated_count > MEMORY_CRITICAL_THRESHOLD:
+            estimated_mb = (estimated_count * 28) / (1024 * 1024)  # تخمین تقریبی
+            reply = QMessageBox.question(
+                self,
+                "⚠️ هشدار مصرف حافظه",
+                f"این عملیات تقریباً {estimated_count:,} نتیجه تولید می‌کند\n"
+                f"و ممکن است تا {estimated_mb:.0f} MB حافظه مصرف کند.\n\n"
+                "ادامه می‌دهید؟",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            return reply == QMessageBox.StandardButton.Yes
+        elif estimated_count > MEMORY_WARNING_THRESHOLD:
+            estimated_mb = (estimated_count * 28) / (1024 * 1024)
+            reply = QMessageBox.question(
+                self,
+                "💡 هشدار حافظه",
+                f"این عملیات {estimated_count:,} نتیجه تولید می‌کند\n"
+                f"و حدود {estimated_mb:.0f} MB حافظه مصرف می‌کند.\n\n"
+                "ادامه می‌دهید؟",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+            return reply == QMessageBox.StandardButton.Yes
+        return True
+
+    def _start_calculation(self, fn: Callable, *args,
+                          finished_callback=None,
+                          estimated_result_count: int = 0):
+        """
+        شروع محاسبه Thread-Safe با مدیریت Race Condition.
+        """
+        # جلوگیری از اجرای همزمان
+        if self._is_calculating:
+            logger.warning("Calculation already in progress, ignoring new request")
+            return
+
+        # بررسی حافظه
+        if estimated_result_count > 0:
+            if not self._check_memory_threshold(estimated_result_count):
+                return
+
+        # تنظیم وضعیت
+        self._is_calculating = True
         self._set_ui_enabled(False)
+
+        # نمایش progress و دکمه لغو
         if self._progress_bar:
             self._progress_bar.setVisible(True)
+        if self._cancel_btn:
+            self._cancel_btn.setVisible(True)
 
-        worker = CalculationWorker(fn, *args)
+        # ایجاد cancellation token جدید
+        self._cancellation_token = CancellationToken()
+
+        # ایجاد worker
+        worker = CalculationWorker(fn, *args, cancellation_token=self._cancellation_token)
 
         if finished_callback:
             worker.signals.finished.connect(finished_callback)
         worker.signals.error.connect(self._on_calculation_error)
         worker.signals.finished.connect(lambda _: self._on_calculation_finished())
 
+        self._active_worker = worker
         self._thread_pool.start(worker)
 
+    def _cancel_calculation(self):
+        """لغو عملیات در حال اجرا."""
+        if self._active_worker and self._is_calculating:
+            logger.info("User requested calculation cancellation")
+            self._active_worker.cancel()
+            if self._cancel_btn:
+                self._cancel_btn.setEnabled(False)
+                self._cancel_btn.setText("⏳ در حال لغو...")
+
     def _on_calculation_error(self, error_msg: str):
-        self._set_ui_enabled(True)
-        if self._progress_bar:
-            self._progress_bar.setVisible(False)
+        """مدیریت خطای Thread-Safe."""
+        self._reset_calculation_state()
         self._show_error(f"خطای سیستمی: {error_msg}")
         logger.error(f"Calculation error: {error_msg}")
 
     def _on_calculation_finished(self):
+        """پاکسازی بعد از اتمام محاسبه."""
+        self._reset_calculation_state()
+
+    def _reset_calculation_state(self):
+        """بازنشانی وضعیت محاسبه."""
+        self._is_calculating = False
+        self._active_worker = None
+        self._cancellation_token = None
         self._set_ui_enabled(True)
+
         if self._progress_bar:
             self._progress_bar.setVisible(False)
+        if self._cancel_btn:
+            self._cancel_btn.setVisible(False)
+            self._cancel_btn.setEnabled(True)
+            self._cancel_btn.setText("✕ لغو")
 
     def _set_ui_enabled(self, enabled: bool):
+        """مدیریت cursor و وضعیت UI."""
         if enabled:
             QApplication.restoreOverrideCursor()
         else:
@@ -667,6 +879,7 @@ class BasePrimeTab(QWidget):
 
     @staticmethod
     def _parse_numbers(text: str) -> List[int]:
+        """پارس اعداد با پشتیبانی از فرمت‌های مختلف."""
         persian_arabic_digits = "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩"
         english_digits = "01234567890123456789"
         translation_table = str.maketrans(persian_arabic_digits, english_digits)
@@ -677,17 +890,33 @@ class BasePrimeTab(QWidget):
         return [int(p) for p in parts if p]
 
     @staticmethod
-    def _build_html_list(items, formatter=str, chunk_size=RESULT_CHUNK_SIZE) -> List[str]:
-        """ساخت لیست HTML بهینه برای نمایش نتایج."""
+    def _build_html_list(items: List, formatter: Callable = str,
+                        chunk_size: int = RESULT_CHUNK_SIZE,
+                        separator: str = "، ") -> List[str]:
+        """ساخت لیست HTML بهینه."""
         html_parts = []
         for i in range(0, len(items), chunk_size):
             chunk = items[i:i+chunk_size]
-            html_parts.append("، ".join(formatter(item) for item in chunk))
+            html_parts.append(separator.join(formatter(item) for item in chunk))
         return html_parts
+
+    def _copy_to_clipboard(self, data: List, formatter: Callable = str):
+        """کپی نتایج به کلیپبورد با فرمت CSV استاندارد."""
+        import csv
+        from io import StringIO
+
+        output = StringIO()
+        writer = csv.writer(output)
+        for item in data:
+            writer.writerow([formatter(item)])
+
+        clipboard = QApplication.clipboard()
+        clipboard.setText(output.getvalue())
+        logger.info(f"Copied {len(data)} items to clipboard")
 
 
 # ============================================================================
-# Tab Implementations
+# Tab Implementations - Thread-Safe
 # ============================================================================
 
 class PrimeCheckerTab(BasePrimeTab):
@@ -735,6 +964,7 @@ class PrimeCheckerTab(BasePrimeTab):
                     finished_callback=self._display_result
                 )
             else:
+                # سریع - مستقیم اجرا می‌شود
                 result = self.engine.check_prime(n)
                 self._display_result(result)
 
@@ -811,8 +1041,12 @@ class SieveTab(BasePrimeTab):
 
         l.addWidget(self._create_button("🧹 اجرا", self._gen, True), 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self._progress_bar = self._create_progress_bar()
-        l.addWidget(self._progress_bar)
+        # Progress bar with cancel button
+        l.addLayout(self._create_progress_with_cancel())
+
+        # Memory warning label
+        self._memory_warning = self._create_memory_warning()
+        l.addWidget(self._memory_warning)
 
         sc = QScrollArea()
         sc.setWidgetResizable(True)
@@ -842,9 +1076,12 @@ class SieveTab(BasePrimeTab):
             if e > SIEVE_MAX_RANGE:
                 return self._show_error(f"حداکثر: {self._fmt(SIEVE_MAX_RANGE)}")
 
+            # تخمین تعداد نتایج برای هشدار حافظه
+            estimated = int((e - s) / 6)  # تقریب تراکم اعداد اول
             self._start_calculation(
                 self.engine.generate_primes, s, e,
-                finished_callback=self._display_primes
+                finished_callback=self._display_primes,
+                estimated_result_count=estimated
             )
         except (ValueError, IndexError):
             self._show_error("عدد صحیح معتبر!")
@@ -860,8 +1097,13 @@ class SieveTab(BasePrimeTab):
             self.ra.setHtml(f"<p style='color:{c['warning_text']};'>⚠️ عدد اولی یافت نشد.</p>")
             return
 
-        # نمایش کامل همه نتایج - بدون محدودیت
-        html = [f"<h4 style='color:{c['text_accent']};'>🔢 {self._fmt(len(primes))} عدد اول</h4><hr>"]
+        # نمایش کامل همه نتایج
+        html = [
+            f"<h4 style='color:{c['text_accent']};'>🔢 {self._fmt(len(primes))} عدد اول</h4>",
+            f"<p style='color:{c['text_muted']}; font-size:12px;'>"
+            f"💡 راهنما: Ctrl+A انتخاب همه | Ctrl+C کپی | برای CSV استاندارد از منوی ابزارها استفاده کنید</p>"
+            f"<hr>"
+        ]
         html.extend(self._build_html_list(primes))
         self.ra.setHtml("<br><br>".join(html))
         self.sf.clear()
@@ -905,29 +1147,45 @@ class DivisorsTab(BasePrimeTab):
                 return self._show_error("بزرگتر از ۰!")
 
             if n > 10**9:
+                # Worker شامل is_prime هم می‌شود
                 self._start_calculation(
-                    self.engine.get_divisors, n,
-                    finished_callback=lambda divs: self._display_divisors(divs, n)
+                    self._calculate_divisors_with_metadata, n,
+                    finished_callback=self._display_divisors_result
                 )
             else:
-                divs = self.engine.get_divisors(n)
-                self._display_divisors(divs, n)
+                result = self._calculate_divisors_with_metadata(n)
+                self._display_divisors_result(result)
         except (ValueError, IndexError):
             self._show_error("عدد صحیح معتبر!")
         except Exception as e:
             logger.exception("Unexpected error in DivisorsTab")
             self._show_error(f"خطای سیستمی: {e}")
 
-    def _display_divisors(self, divs, n):
+    def _calculate_divisors_with_metadata(self, n: int) -> CalculationResult:
+        """محاسبه کامل در worker شامل is_prime."""
+        divs = self.engine.get_divisors(n)
+        is_prime = self.engine.is_prime(n)
+        return CalculationResult(
+            data={'divisors': divs, 'n': n, 'is_prime': is_prime},
+            metadata={'count': len(divs)}
+        )
+
+    def _display_divisors_result(self, result: CalculationResult):
+        """نمایش نتیجه کامل."""
         c = self.theme.colors
         self.ra.clear()
         self._tmr.stop()
+
+        data = result.data
+        divs = data['divisors']
+        n = data['n']
+        is_prime = data['is_prime']
 
         html_content = [
             f"<h3 style='color:{c['text_accent']};'>نتایج برای عدد {n}</h3>",
             f"<p>تعداد شمارنده‌ها: <b>{len(divs)}</b></p>"
         ]
-        if self.engine.is_prime(n):
+        if is_prime:
             html_content.append(f"<p style='color:{c['success_text']};'>✨ این عدد اول است.</p>")
 
         html_content.append("<h4>شمارنده‌ها:</h4>")
@@ -960,8 +1218,9 @@ class TwinPrimesTab(BasePrimeTab):
 
         l.addWidget(self._create_button("👯 پیدا کن", self._find, True), 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self._progress_bar = self._create_progress_bar()
-        l.addWidget(self._progress_bar)
+        l.addLayout(self._create_progress_with_cancel())
+        self._memory_warning = self._create_memory_warning()
+        l.addWidget(self._memory_warning)
 
         sc = QScrollArea()
         sc.setWidgetResizable(True)
@@ -988,9 +1247,11 @@ class TwinPrimesTab(BasePrimeTab):
             if s > e:
                 return self._show_error("حد پایین > حد بالا!")
 
+            estimated = int((e - s) / 100)  # تقریب تراکم دوقلوها
             self._start_calculation(
                 self.engine.find_twin_primes, s, e,
-                finished_callback=self._display_twins
+                finished_callback=self._display_twins,
+                estimated_result_count=estimated
             )
         except (ValueError, IndexError):
             self._show_error("عدد صحیح معتبر!")
@@ -1006,7 +1267,6 @@ class TwinPrimesTab(BasePrimeTab):
         if not twins:
             html_content.append(f"<p style='color:{c['warning_text']};'>⚠️ جفتی یافت نشد.</p>")
         else:
-            # نمایش کامل همه جفت‌ها
             html_content.extend(
                 self._build_html_list(twins, formatter=lambda x: f"({x[0]}, {x[1]})")
             )
@@ -1176,7 +1436,7 @@ class LCMTab(BasePrimeTab):
 
 
 # ============================================================================
-# Optimized Main Window
+# Production-Ready Main Window
 # ============================================================================
 
 class PrimeToolsWindow(QWidget):
@@ -1205,7 +1465,7 @@ class PrimeToolsWindow(QWidget):
         self._apply_theme()
         self._center()
 
-        logger.info("PrimeToolsWindow v9.0.0 initialized successfully.")
+        logger.info("PrimeToolsWindow v9.1.0 Thread-Safe initialized successfully.")
 
     def _init_ui(self):
         self.setWindowTitle("🧮 ابزار اعداد اول")
@@ -1253,7 +1513,7 @@ class PrimeToolsWindow(QWidget):
 
         root.addWidget(self._tab_widget, 1)
 
-        status = QLabel("Ctrl+1..7 انتخاب تب | Ctrl+T تم | F1 راهنما")
+        status = QLabel("Ctrl+1..7 انتخاب تب | Ctrl+T تم | F1 راهنما | Ctrl+C کپی نتایج")
         status.setFont(FontSystem.persian_status())
         status.setStyleSheet(f"color: {self.theme.colors['text_muted']}; padding: 6px;")
         status.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1269,7 +1529,6 @@ class PrimeToolsWindow(QWidget):
         tm = fm.addMenu("📑 انتخاب تب")
         for i, n in enumerate(self.TAB_NAMES):
             a = QAction(f"  {n}", self)
-            # Fixed: Remove setAccessibleName for QAction
             a.triggered.connect(lambda _, idx=i: self._tab_widget.setCurrentIndex(idx))
             tm.addAction(a)
 
@@ -1349,11 +1608,11 @@ class PrimeToolsWindow(QWidget):
     def _help(self):
         c = self.theme.colors
         QMessageBox.information(self, "📖 راهنما",
-            f"<h3 style='color:{c['accent']};'>🧮 Prime Tools Suite v9.0</h3>"
-            f"<p><b>۷ ابزار جامع ریاضی:</b></p>"
+            f"<h3 style='color:{c['accent']};'>🧮 Prime Tools Suite v9.1</h3>"
+            f"<p><b>۷ ابزار جامع ریاضی با پشتیبانی Thread-Safe:</b></p>"
             f"<ol>"
-            f"<li>🔍 تشخیص عدد اول</li><li>🧹 غربال اراتستن</li>"
-            f"<li>📊 شمارنده‌ها</li><li>👯 اعداد دوقلو</li>"
+            f"<li>🔍 تشخیص عدد اول</li><li>🧹 غربال اراتستن (با قابلیت لغو)</li>"
+            f"<li>📊 شمارنده‌ها</li><li>👯 اعداد دوقلو (با قابلیت لغو)</li>"
             f"<li>🔬 عوامل اول</li><li>🔗 ب.م.م</li><li>📏 ک.م.م</li>"
             f"</ol>"
             f"<hr><p><b>⌨️ کلیدهای میانبر:</b></p>"
@@ -1362,6 +1621,7 @@ class PrimeToolsWindow(QWidget):
             f"<li><b>Ctrl+T</b> — تغییر تم</li>"
             f"<li><b>Ctrl+Q</b> — خروج</li>"
             f"<li><b>F1</b> — راهنما</li>"
+            f"<li><b>Esc</b> — لغو عملیات</li>"
             f"</ul>"
         )
 
@@ -1373,16 +1633,29 @@ class PrimeToolsWindow(QWidget):
         f.moveCenter(s.center())
         self.move(f.topLeft())
 
+    def keyPressEvent(self, event):
+        """پشتیبانی از کلید Esc برای لغو عملیات."""
+        if event.key() == Qt.Key.Key_Escape:
+            current_tab = self._tabs[self._tab_widget.currentIndex()]
+            if hasattr(current_tab, '_cancel_calculation'):
+                current_tab._cancel_calculation()
+        super().keyPressEvent(event)
+
     def closeEvent(self, event):
+        """پاکسازی ایمن."""
         self.cleanup()
         super().closeEvent(event)
 
     def cleanup(self):
+        """پاکسازی همه منابع."""
         for t in self._tabs:
             if hasattr(t, '_tmr'):
                 t._tmr.stop()
-        self._thread_pool = QThreadPool.globalInstance()
-        self._thread_pool.waitForDone(1000)
+            if hasattr(t, '_cancel_calculation'):
+                t._cancel_calculation()
+
+        # Wait for all threads to finish
+        QThreadPool.globalInstance().waitForDone(2000)
 
 
 if __name__ == "__main__":
