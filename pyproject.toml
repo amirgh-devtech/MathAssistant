@@ -32,9 +32,6 @@ dependencies = [
     "pyqt6>=6.11.0",
     "pyqt6-qt6>=6.11.1",
     "pyqt6-sip>=13.11.1",
-    "pyside6>=6.11.1",
-    "pyside6-addons>=6.11.1",
-    "pyside6-essentials>=6.11.1",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
     "python-dateutil>=2.9.0.post0",
@@ -43,31 +40,18 @@ dependencies = [
     "six>=1.17.0",
     "sympy>=1.14.0",
     "typing-extensions>=4.15.0",
-    "tzdata>=2026.2"
+    "tzdata>=2026.2",
 ]
 
-# ============================================================
-# تنظیمات میرور برای pip
-# ============================================================
-[tool.uv.pip]
-# میرور اصلی
-index-url = "https://mirror-pypi.runflare.com/simple"
+# [tool.uv.pip]
+# index-url = "https://mirror-pypi.runflare.com/simple"
+#
+# extra-index-url = [
+# "https://pypi.iranserver.com/repository/pypi/simple",
+# "https://pypi.devneeds.ir/simple/",
+# "https://package-mirror.liara.ir/repository/pypi/simple",
+# "https://pypi.org/simple/",
+# ]
 
-# میرورهای اضافی (fallback)
-extra-index-url = [
-    "https://pypi.iranserver.com/repository/pypi/simple",
-    "https://pypi.devneeds.ir/simple/",
-    "https://package-mirror.liara.ir/repository/pypi/simple",
-    "https://pypi.org/simple/",
-]
-
-# ============================================================
-# تنظیمات اضافی uv
-# ============================================================
 [tool.uv]
-# کش محلی برای سرعت بیشتر
-cache-dir = ".uv_cache"
-
-# استراتژی حل وابستگی‌ها
 resolution = "highest"
-

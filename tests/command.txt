@@ -1,0 +1,1 @@
+pytest tests/ -v --ignore=tests/unit/test_theme_manager.py; pytest tests/unit/test_theme_manager.py -v
