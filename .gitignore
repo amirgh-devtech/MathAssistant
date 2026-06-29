@@ -65,6 +65,7 @@ $RECYCLE.BIN/
 debug*.py
 *.pdf
 *.docx
+*.7z
 
 # === Misc ===
 .direnv/
