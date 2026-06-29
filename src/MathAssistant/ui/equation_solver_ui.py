@@ -1,9 +1,9 @@
 # src/MathAssistant/ui/equation_solver_ui.py
 """
-MathAssistant Pro - نسخه نهایی با تمام باگ‌ها رفع شده
+MathAssistant Pro - نسخه پلاتینیوم نهایی با تست‌های کامل
 
 Author: AmirMohammad Ghasemzadeh
-Version: 12.0.0 - Fully Fixed
+Version: 13.3.1 - Platinum Final Edition (Hotfix)
 """
 
 import sys
@@ -14,6 +14,7 @@ import re
 import warnings
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+from collections import OrderedDict
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -22,10 +23,11 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QSplitter, QGraphicsDropShadowEffect
 )
 from PyQt6.QtCore import (
-    Qt, pyqtSignal, pyqtSlot, QThread, QSettings
+    Qt, pyqtSignal, pyqtSlot, QThread, QSettings,
+    QTimer, QMutex, QMutexLocker
 )
 from PyQt6.QtGui import (
-    QFont, QColor, QPixmap
+    QFont, QColor, QPixmap, QKeySequence, QShortcut
 )
 
 import matplotlib
@@ -46,6 +48,13 @@ from sympy.parsing.sympy_parser import (
     implicit_multiplication_application, convert_xor
 )
 
+# Import regex with fallback
+try:
+    import regex as advanced_regex # type: ignore
+    HAS_ADVANCED_REGEX = True
+except ImportError:
+    HAS_ADVANCED_REGEX = False
+
 try:
     from ..core.equation_solver import EquationSolverEngine, EquationSolution, SolutionStep
 except ImportError:
@@ -56,7 +65,15 @@ TRANSFORMATIONS = (
     (implicit_multiplication_application, convert_xor)
 )
 
-DEBUG = False  # False برای نسخه نهایی
+# تنظیمات امنیتی و عملکردی
+MAX_INPUT_LENGTH = 500
+REGEX_TIMEOUT = 1.0
+MAX_NESTING_DEPTH = 5
+MAX_CACHE_SIZE = 200
+MAX_HISTORY_ITEMS = 50
+SQRT_LIST_THRESHOLD = 100
+
+DEBUG = False
 
 
 def debug_log(msg):
@@ -65,8 +82,334 @@ def debug_log(msg):
 
 
 # ============================================================================
-# توابع
+# تست‌های داخلی - نسخه کامل
 # ============================================================================
+
+class MathRendererTests:
+    """تست‌های جامع برای توابع تبدیل"""
+
+    @staticmethod
+    def run_all():
+        """اجرای تمام تست‌ها و بازگشت (passed, failed)"""
+        tests = [
+            # تست‌های پایه
+            MathRendererTests.test_sqrt_simple,
+            MathRendererTests.test_sqrt_nested,
+            MathRendererTests.test_sqrt_deep_nesting,
+            MathRendererTests.test_sqrt_no_sqrt,
+            MathRendererTests.test_sqrt_complex,
+            MathRendererTests.test_sqrt_edge_cases,
+
+            # تست یکسانی الگوریتم‌ها
+            MathRendererTests.test_sqrt_algorithms_identical,
+
+            # تست حروف یونانی
+            MathRendererTests.test_greek_letters,
+            MathRendererTests.test_greek_mixed,
+            MathRendererTests.test_greek_compound_words,
+
+            # تست‌های مرزی
+            MathRendererTests.test_empty_inputs,
+
+            # تست اعتبارسنجی ورودی
+            MathRendererTests.test_input_validation,
+        ]
+
+        passed = 0
+        failed = 0
+
+        for test in tests:
+            try:
+                test()
+                passed += 1
+                debug_log(f"✅ {test.__name__} passed")
+            except AssertionError as e:
+                failed += 1
+                debug_log(f"❌ {test.__name__} FAILED: {str(e)}")
+            except Exception as e:
+                failed += 1
+                debug_log(f"💥 {test.__name__} ERROR: {str(e)}")
+
+        if DEBUG or "--test" in sys.argv:
+            print(f"\n📊 Test Results: {passed} passed, {failed} failed")
+
+        return passed, failed
+
+    @staticmethod
+    def test_sqrt_simple():
+        """تست تبدیل sqrt ساده"""
+        result = MathRenderer._convert_sqrt_safe("sqrt(4)")
+        assert "\\sqrt{4}" in result, f"Expected \\sqrt{{4}}, got {result}"
+
+    @staticmethod
+    def test_sqrt_nested():
+        """تست sqrt تو در تو"""
+        result = MathRenderer._convert_sqrt_safe("sqrt(sqrt(16))")
+        assert "\\sqrt{\\sqrt{16}}" in result, f"Expected nested sqrt, got {result}"
+
+    @staticmethod
+    def test_sqrt_deep_nesting():
+        """تست sqrt با عمق MAX_NESTING_DEPTH"""
+        depth = MAX_NESTING_DEPTH
+        # ایجاد عبارت با عمق دقیق
+        expr = "sqrt(" * depth + "32" + ")" * depth
+        result = MathRenderer._convert_sqrt_safe(expr)
+        assert result.count("\\sqrt{") >= depth, \
+            f"Expected at least {depth} sqrt, got {result.count('\\sqrt{')}"
+
+    @staticmethod
+    def test_sqrt_no_sqrt():
+        """تست عبارت بدون sqrt"""
+        result = MathRenderer._convert_sqrt_safe("x^2 + 5")
+        assert result == "x^2 + 5", f"Expected no change, got {result}"
+
+    @staticmethod
+    def test_sqrt_complex():
+        """تست عبارت با چند sqrt"""
+        result = MathRenderer._convert_sqrt_safe("sqrt(x^2 + 5) + sqrt(9)")
+        assert result.count("\\sqrt{") == 2, \
+            f"Expected 2 sqrt, got {result.count('\\sqrt{')}"
+
+    @staticmethod
+    def test_sqrt_edge_cases():
+        """تست موارد مرزی sqrt"""
+        # شروع با sqrt
+        assert "\\sqrt{x}" in MathRenderer._convert_sqrt_safe("sqrt(x)")
+
+        # چند sqrt با متغیرهای مختلف
+        result = MathRenderer._convert_sqrt_safe("sqrt(x) + sqrt(y)")
+        assert result.count("\\sqrt{") == 2
+        assert "\\sqrt{x}" in result
+        assert "\\sqrt{y}" in result
+
+        # بدون sqrt - نباید تغییر کند
+        assert MathRenderer._convert_sqrt_safe("no sqrt here") == "no sqrt here"
+
+        # sqrt در انتهای عبارت
+        result = MathRenderer._convert_sqrt_safe("x + sqrt(y)")
+        assert "\\sqrt{y}" in result
+
+        # عبارت خالی
+        assert MathRenderer._convert_sqrt_safe("") == ""
+
+    @staticmethod
+    def test_sqrt_algorithms_identical():
+        """تست یکسانی خروجی دو الگوریتم"""
+        test_cases = [
+            "sqrt(x)",
+            "sqrt(x+1)",
+            "sqrt(sqrt(16))",
+            "sqrt(x^2 + 5) + sqrt(9)",
+            "x + sqrt(y) + z",
+            "sqrt(a) + sqrt(b) + sqrt(c)",
+            "sqrt(sqrt(sqrt(8)))",
+            "2*sqrt(x) + 3*sqrt(y)",
+            "sqrt(x^2 + y^2)",
+            "1 + sqrt(4) + sqrt(9) + sqrt(16)",
+        ]
+
+        for case in test_cases:
+            result_list = MathRenderer._convert_sqrt_list(case, MAX_NESTING_DEPTH)
+            result_fast = MathRenderer._convert_sqrt_fast(case, MAX_NESTING_DEPTH)
+            assert result_list == result_fast, \
+                f"Algorithm mismatch for '{case}':\n  list: '{result_list}'\n  fast: '{result_fast}'"
+
+    @staticmethod
+    def test_greek_letters():
+        """تست تبدیل حروف یونانی"""
+        result = MathRenderer._fix_greek_letters("Delta + alpha + pi")
+        assert "\\Delta" in result, f"Expected \\Delta, got {result}"
+        assert "\\alpha" in result, f"Expected \\alpha, got {result}"
+        assert "\\pi" in result, f"Expected \\pi, got {result}"
+
+    @staticmethod
+    def test_greek_mixed():
+        """تست حروف یونانی در ترکیب با عبارات"""
+        result = MathRenderer._fix_greek_letters("sin(theta) + Delta^2")
+        assert "\\theta" in result, f"Expected \\theta, got {result}"
+        assert "\\Delta" in result, f"Expected \\Delta, got {result}"
+
+    @staticmethod
+    def test_greek_compound_words():
+        """تست حروف یونانی در کلمات ترکیبی"""
+        # Delta در وسط کلمه نباید تبدیل شود
+        result = MathRenderer._fix_greek_letters("myDeltaVar + realDelta")
+        assert "\\Delta" not in result, \
+            f"Delta in compound word should NOT be converted, got {result}"
+
+        # اما Delta به تنهایی باید تبدیل شود
+        result2 = MathRenderer._fix_greek_letters("Delta")
+        assert result2 == "\\Delta", f"Standalone Delta should convert, got {result2}"
+
+        # alpha در وسط کلمه
+        result3 = MathRenderer._fix_greek_letters("alpha_beta + myalpha")
+        assert "\\alpha" in result3, f"Standalone alpha should convert"
+        assert result3.count("\\alpha") == 1, \
+            f"Only standalone alpha should convert, got {result3}"
+
+    @staticmethod
+    def test_empty_inputs():
+        """تست ورودی‌های خالی"""
+        assert MathRenderer._convert_sqrt_safe("") == ""
+        assert MathRenderer._fix_greek_letters("") == ""
+        assert MathRenderer._to_latex_safe("") is None
+        assert MathRenderer._to_latex_safe(None) is None
+
+    @staticmethod
+    def test_input_validation():
+        """تست اعتبارسنجی ورودی"""
+        # ورودی‌های معتبر
+        try:
+            InputValidator.validate("x^2 - 5x + 6 = 0")
+            InputValidator.validate("2*x + 5 = 10")
+            InputValidator.validate("sin(x) + cos(x) = 1")
+            InputValidator.validate("sqrt(x^2 + y^2)")
+            InputValidator.validate("x + y = 5")
+            InputValidator.validate("Delta + alpha = pi")
+        except ValueError as e:
+            assert False, f"Valid input rejected: {str(e)}"
+
+        # ورودی نامعتبر - طول زیاد
+        try:
+            InputValidator.validate("x" * (MAX_INPUT_LENGTH + 1))
+            assert False, "Should reject long input"
+        except ValueError:
+            pass
+
+
+# ============================================================================
+# توابع امنیتی و کمکی
+# ============================================================================
+
+class InputValidator:
+    """اعتبارسنجی امن ورودی‌ها"""
+
+    PERSIAN_WORDS = [
+        'معادله', 'جواب', 'حل', 'مساوی', 'برابر', 'بزرگتر', 'کوچکتر',
+        'جذر', 'توان', 'ضربدر', 'تقسیم', 'بعلاوه', 'منهای', 'سینوس',
+        'کسینوس', 'تانژانت', 'لگاریتم', 'نپر', 'مشتق', 'انتگرال', 'حد'
+    ]
+
+    # الگوی کاراکترهای مجاز - فقط کاراکترهای غیرمجاز را پیدا می‌کند
+    ALLOWED_CHARS_PATTERN = re.compile(
+        r'^[\w\s\+\-\*/\^\(\)\[\]\{\}\.\,\=<>!|&'
+        r'°′″‴'
+        r'₁₂₃₄₅₆₇₈₉₀²³⁴⁵⁶⁷⁸⁹⁰¹'
+        r'αβγδεζηθικλμνξπρστυφχψω'
+        r'ΔΘΛΞΠΣΦΨΩ'
+        r'×÷±≤≥≠√∞π'
+        r'\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff'  # Persian/Arabic
+        r'\ufb50-\ufdff\ufe70-\ufeff'
+        r']*$'
+    )
+
+    DANGEROUS_PATTERNS = [
+        (re.compile(r'[\'";`]'), 'کاراکتر کنترلی'),
+        (re.compile(r'__(?:import|eval|exec|open|file)__'), 'دسترسی ممنوعه'),
+        (re.compile(r'\bos\.'), 'دسترسی سیستمی ممنوع'),
+        (re.compile(r'\bsubprocess\b'), 'اجرای کد ممنوع'),
+        (re.compile(r'<script'), 'اسکریپت ممنوع'),
+    ]
+
+    @classmethod
+    def validate(cls, expr: str) -> str:
+        """اعتبارسنجی کامل ورودی"""
+        if not expr or not expr.strip():
+            raise ValueError("ورودی خالی است")
+
+        expr = expr.strip()
+
+        if len(expr) > MAX_INPUT_LENGTH:
+            raise ValueError(
+                f"عبارت خیلی طولانی است (حداکثر {MAX_INPUT_LENGTH} کاراکتر)\n"
+                f"طول فعلی: {len(expr)}"
+            )
+
+        cleaned = cls._remove_persian_words(expr)
+
+        # بررسی کاراکترهای نامعتبر با الگوی جدید
+        invalid_chars = cls._find_invalid_chars(cleaned)
+        if invalid_chars:
+            raise ValueError(
+                f"کاراکترهای نامعتبر شناسایی شد:\n{', '.join(sorted(invalid_chars))}\n"
+                f"فقط کاراکترهای ریاضی مجاز هستند"
+            )
+
+        depth = cls._get_nesting_depth(cleaned)
+        if depth > MAX_NESTING_DEPTH:
+            raise ValueError(
+                f"تعداد nested پرانتز بیش از حد مجاز است\n"
+                f"حداکثر مجاز: {MAX_NESTING_DEPTH}\n"
+                f"عمق فعلی: {depth}"
+            )
+
+        for pattern, msg in cls.DANGEROUS_PATTERNS:
+            if pattern.search(cleaned):
+                raise ValueError(f"الگوی خطرناک شناسایی شد: {msg}")
+
+        return cleaned
+
+    @classmethod
+    def _remove_persian_words(cls, expr: str) -> str:
+        """حذف کلمات فارسی"""
+        result = expr
+        for word in cls.PERSIAN_WORDS:
+            result = re.sub(rf'\b{word}\b', '', result, flags=re.IGNORECASE)
+        return ' '.join(result.split())
+
+    @classmethod
+    def _find_invalid_chars(cls, expr: str) -> set:
+        """پیدا کردن کاراکترهای نامعتبر - فقط کاراکترهای واقعاً نامعتبر"""
+        invalid = set()
+        for char in expr:
+            # اجازه دادن به کاراکترهای مجاز و فاصله
+            if not char.isspace() and not cls._is_allowed_char(char):
+                invalid.add(repr(char))
+        return invalid
+
+    @classmethod
+    def _is_allowed_char(cls, char: str) -> bool:
+        """بررسی مجاز بودن یک کاراکتر"""
+        # حروف و اعداد
+        if char.isalnum():
+            return True
+        # کاراکترهای ریاضی
+        if char in '+-*/^()[]{}.=<>!|&°′″‴':
+            return True
+        # کاراکترهای یونیکد ریاضی
+        if '\u2080' <= char <= '\u2089':  # subscript
+            return True
+        if '\u00B2' <= char <= '\u00B9':  # superscript
+            return True
+        # حروف یونانی
+        if '\u0391' <= char <= '\u03C9':  # Greek
+            return True
+        # کاراکترهای خاص ریاضی
+        if char in '×÷±≤≥≠√∞π₁₂₃₄₅₆₇₈₉₀²³⁴⁵⁶⁷⁸⁹⁰¹αβγδεζηθικλμνξπρστυφχψωΔΘΛΞΠΣΦΨΩ':
+            return True
+        # کاراکترهای فارسی/عربی
+        if '\u0600' <= char <= '\u06ff' or \
+           '\u0750' <= char <= '\u077f' or \
+           '\u08a0' <= char <= '\u08ff' or \
+           '\ufb50' <= char <= '\ufdff' or \
+           '\ufe70' <= char <= '\ufeff':
+            return True
+        return False
+
+    @classmethod
+    def _get_nesting_depth(cls, expr: str) -> int:
+        """محاسبه عمق nested"""
+        max_depth = 0
+        current = 0
+        for char in expr:
+            if char in '([{':
+                current += 1
+                max_depth = max(max_depth, current)
+            elif char in ')]}':
+                if current > 0:
+                    current -= 1
+        return max_depth
+
 
 def has_persian(text):
     if not text:
@@ -96,31 +439,24 @@ def has_math(text):
 
 
 def clean_unicode(text):
-    """تبدیل یونیکد به ASCII - فقط کاراکترهایی که SymPy نمیفهمه"""
+    """تبدیل یونیکد به ASCII"""
     if not text:
         return ""
     t = text
 
-    # حذف کاراکترهای مزاحم
     t = re.sub(r'[•●○◆◇►→←⇒⇐\u200b-\u200f\u2026\u201c\u201d\u2018\u2019]', '', t)
     t = re.sub(r'[−–—―\u2010-\u2015]', '-', t)
 
-    # تبدیل یونیکد ریاضی
     replacements = [
-        # زیرنویس‌ها (SymPy نمیفهمه)
         ('₁', '_1'), ('₂', '_2'), ('₃', '_3'), ('₄', '_4'), ('₅', '_5'),
         ('₆', '_6'), ('₇', '_7'), ('₈', '_8'), ('₉', '_9'), ('₀', '_0'),
-        # توان‌ها
         ('²', '^2'), ('³', '^3'), ('⁴', '^4'), ('⁵', '^5'),
         ('⁶', '^6'), ('⁷', '^7'), ('⁸', '^8'), ('⁹', '^9'),
         ('⁰', '^0'), ('¹', '^1'),
-        # عملگرها
         ('×', '*'), ('÷', '/'), ('±', '+-'),
-        # نمادها
-        ('√', 'sqrt('),  # باز کردن پرانتز برای sqrt
+        ('√', 'sqrt('),
         ('∞', 'oo'), ('π', 'pi'),
         ('≤', '<='), ('≥', '>='), ('≠', '!='),
-        # یونانی
         ('Δ', 'Delta'), ('Ω', 'Omega'), ('Σ', 'Sigma'), ('Π', 'Pi'),
         ('α', 'alpha'), ('β', 'beta'), ('γ', 'gamma'), ('δ', 'delta'),
         ('θ', 'theta'), ('λ', 'lambda'), ('μ', 'mu'),
@@ -130,23 +466,9 @@ def clean_unicode(text):
     for old, new in replacements:
         t = t.replace(old, new)
 
-    # بستن پرانتز sqrt اگر باز مونده
-    # sqrt( -> باید پرانتزش بسته بشه
     t = re.sub(r'sqrt\(([^)]*)$', r'sqrt(\1)', t)
-
     t = re.sub(r'\s+', ' ', t).strip()
     return t
-
-
-def split_by_equals(text):
-    """تقسیم هوشمند متن بر اساس = (فقط اولین = معادله)"""
-    if '=' not in text:
-        return text, None
-
-    # اگر چند تا = داره (مثل a=1, b=5)
-    # فقط اولین = رو به عنوان معادله در نظر بگیر
-    parts = text.split('=', 1)
-    return parts[0].strip(), parts[1].strip() if len(parts) > 1 else None
 
 
 # ============================================================================
@@ -178,6 +500,7 @@ class Colors:
         'input_bg': '#0d1117', 'input_border': '#30363d', 'input_focus': '#7c6ff7',
         'scrollbar_handle': '#30363d', 'latex_bg': '#1a1f2e',
         'shadow': QColor(0,0,0,80),
+        'focus_highlight': '#58a6ff'
     }
     LIGHT = {
         'bg': '#f6f8fa', 'surface': '#ffffff', 'surface_raised': '#f6f8fa',
@@ -187,6 +510,7 @@ class Colors:
         'input_bg': '#ffffff', 'input_border': '#d0d7de', 'input_focus': '#6355d8',
         'scrollbar_handle': '#d0d7de', 'latex_bg': '#fafbfc',
         'shadow': QColor(0,0,0,30),
+        'focus_highlight': '#0969da'
     }
 
 
@@ -199,41 +523,53 @@ def stylesheet(c):
         padding: 10px 14px; font: 14px 'Consolas',monospace;
         selection-background-color: {c['accent']}; selection-color: {c['accent_text']};
     }}
-    QTextEdit:focus {{ border-color: {c['input_focus']}; }}
+    QTextEdit:focus {{
+        border-color: {c['input_focus']};
+    }}
     QPushButton {{
         background: {c['surface_raised']}; color: {c['text']};
         border: 2px solid {c['border']}; border-radius: 7px;
         padding: 8px 16px; font: bold 13px 'B Nazanin'; min-height: 28px;
+        outline: none;
     }}
     QPushButton:hover {{ background: {c['border']}; border-color: {c['accent']}; }}
     QPushButton:pressed {{ background: {c['accent']}; color: {c['accent_text']}; }}
     QPushButton:disabled {{ background: {c['surface']}; color: {c['text_muted']}; }}
+    QPushButton:focus {{ outline: none; }}
     QPushButton#accentBtn {{
         background: {c['accent']}; color: {c['accent_text']}; border: none;
         font-size: 14px; padding: 12px 24px; border-radius: 8px;
+        outline: none;
     }}
     QPushButton#accentBtn:hover {{ background: {c['accent_hover']}; }}
+    QPushButton#accentBtn:focus {{ outline: none; }}
     QPushButton#iconBtn {{
         background: transparent; border: 1px solid {c['border']};
         border-radius: 6px; padding: 4px; min-width: 30px; min-height: 30px; font-size: 15px;
+        outline: none;
     }}
     QPushButton#iconBtn:hover {{ background: {c['border']}; }}
+    QPushButton#iconBtn:focus {{ outline: none; }}
     QPushButton#toggleBtn {{
         background: {c['surface']}; color: {c['text_muted']};
         border: 1px solid {c['border']}; border-radius: 6px;
         padding: 4px 8px; font-size: 16px; min-width: 30px; min-height: 30px;
+        outline: none;
     }}
     QPushButton#toggleBtn:hover {{ background: {c['border']}; color: {c['text']}; }}
     QPushButton#toggleBtn[active="true"] {{
         background: {c['accent']}; color: {c['accent_text']}; border-color: {c['accent']};
     }}
+    QPushButton#toggleBtn:focus {{ outline: none; }}
     QPushButton#historyItem {{
         background: {c['surface']}; color: {c['text']};
         border: none; border-left: 3px solid {c['accent']};
         border-radius: 0; padding: 5px 8px; font: 10px 'Consolas',monospace;
         text-align: left; min-height: 22px;
+        outline: none;
     }}
     QPushButton#historyItem:hover {{ background: {c['surface_raised']}; border-left-width: 5px; }}
+    QPushButton#historyItem:focus {{ outline: none; }}
     QPushButton#historyItem[success="true"] {{ border-left-color: {c['success']}; }}
     QPushButton#historyItem[success="false"] {{ border-left-color: {c['error']}; }}
     QScrollArea {{ border: none; background: transparent; }}
@@ -250,15 +586,104 @@ def stylesheet(c):
     }}
     QLabel#mathImage {{ background: transparent; border: none; padding: 0; }}
     QSplitter::handle {{ background: {c['border']}; width: 2px; }}
+    QToolTip {{
+        background: {c['surface_raised']}; color: {c['text']};
+        border: 1px solid {c['border']}; padding: 4px; border-radius: 4px;
+        font: 11px 'B Nazanin';
+    }}
+    QMessageBox {{
+        background: {c['surface']};
+        color: {c['text']};
+    }}
+    QMessageBox QLabel {{
+        color: {c['text']};
+        font: 12px 'B Nazanin';
+        selection-background-color: {c['accent']};
+        selection-color: {c['accent_text']};
+    }}
+    QMessageBox QPushButton {{
+        background: {c['surface_raised']};
+        color: {c['text']};
+        border: 2px solid {c['border']};
+        border-radius: 7px;
+        padding: 8px 16px;
+        font: bold 13px 'B Nazanin';
+        min-height: 28px;
+        min-width: 80px;
+        outline: none;
+    }}
+    QMessageBox QPushButton:hover {{
+        background: {c['border']};
+        border-color: {c['accent']};
+    }}
+    QMessageBox QPushButton:focus {{
+        outline: none;
+    }}
     """
 
 
 # ============================================================================
-# رندرر کاملاً بازنویسی شده
+# QMessageBox با قابلیت انتخاب و کپی متن
+# ============================================================================
+
+class CopyableMessageBox(QMessageBox):
+    """QMessageBox با قابلیت انتخاب و کپی متن خطا"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAccessibleName("پیام برنامه")
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse |
+                                    Qt.TextInteractionFlag.TextSelectableByKeyboard)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+
+    @classmethod
+    def warning(cls, parent, title, text):
+        msg = cls(parent)
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+        # تنظیم متن برای قابلیت انتخاب
+        msg.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse |
+                                   Qt.TextInteractionFlag.TextSelectableByKeyboard)
+        msg.exec()
+
+    @classmethod
+    def information(cls, parent, title, text):
+        msg = cls(parent)
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+        msg.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse |
+                                   Qt.TextInteractionFlag.TextSelectableByKeyboard)
+        msg.exec()
+
+    @classmethod
+    def critical(cls, parent, title, text):
+        msg = cls(parent)
+        msg.setIcon(QMessageBox.Icon.Critical)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+        msg.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse |
+                                   Qt.TextInteractionFlag.TextSelectableByKeyboard)
+        msg.exec()
+
+
+# ============================================================================
+# رندرر بهینه‌شده
 # ============================================================================
 
 class MathRenderer:
-    _cache = {}
+    _cache = OrderedDict()
+    _cache_mutex = QMutex()
+
+    # regex کامپایل شده با word boundaries صحیح
+    _GREEK_PATTERN = re.compile(
+        r'(?<![a-zA-Z])'
+        r'(Delta|Gamma|Theta|Lambda|Sigma|Omega|Pi|'
+        r'alpha|beta|gamma|delta|theta|lambda|mu|'
+        r'sigma|phi|omega|pi|epsilon)'
+        r'(?![a-zA-Z])'
+    )
 
     @classmethod
     def render(cls, text, text_color='#e6edf3', bg_color='#1a1f2e', font_size=13, dpi=150):
@@ -271,38 +696,34 @@ class MathRenderer:
             return None
 
         key = f"{original}|{text_color}|{bg_color}|{font_size}|{dpi}"
-        if key in cls._cache:
-            return cls._cache[key]
 
-        # تمیز کردن یونیکد
+        with QMutexLocker(cls._cache_mutex):
+            if key in cls._cache:
+                cls._cache.move_to_end(key)
+                return cls._cache[key]
+
         clean = clean_unicode(original)
         debug_log(f"render: '{original[:60]}' -> clean: '{clean[:60]}'")
 
-        # تبدیل به LaTeX
         latex_str = cls._to_latex_safe(clean)
         if not latex_str:
-            debug_log(f"render: _to_latex_safe returned None")
             return None
 
         debug_log(f"render: LaTeX = '{latex_str[:100]}'")
 
-        # رندر
         result = cls._render_png(latex_str, text_color, bg_color, font_size, dpi)
 
         if result:
-            if len(cls._cache) >= 100:
-                cls._cache.pop(next(iter(cls._cache)))
-            cls._cache[key] = result
+            with QMutexLocker(cls._cache_mutex):
+                while len(cls._cache) >= MAX_CACHE_SIZE:
+                    cls._cache.popitem(last=False)
+                cls._cache[key] = result
 
         return result
 
     @classmethod
     def _to_latex_safe(cls, expr):
-        """
-        تبدیل امن به LaTeX.
-        خطاهای regex رو catch میکنه و fallback میده.
-        """
-        # اول مطمئن شو که expr معتبره
+        """تبدیل امن به LaTeX"""
         if not expr or not expr.strip():
             return None
 
@@ -312,24 +733,21 @@ class MathRenderer:
         try:
             latex_str = cls._sympy_convert(expr)
             if latex_str:
-                debug_log(f"_to_latex_safe: SymPy success")
                 return latex_str
         except Exception as e:
             debug_log(f"_to_latex_safe: SymPy failed ({str(e)[:80]})")
 
-        # روش ۲: تبدیل دستی امن
+        # روش ۲: تبدیل دستی
         try:
-            latex_str = cls._manual_convert(expr)
+            latex_str = cls._manual_convert_safe(expr)
             if latex_str:
-                debug_log(f"_to_latex_safe: manual success")
                 return latex_str
         except Exception as e:
             debug_log(f"_to_latex_safe: manual failed ({str(e)[:80]})")
 
-        # روش ۳: فقط escape کاراکترهای خاص و نمایش
+        # روش ۳: escape ساده
         try:
             safe = expr
-            # فقط کاراکترهای خطرناک رو escape کن
             safe = safe.replace('\\', '\\backslash ')
             safe = safe.replace('{', '\\{')
             safe = safe.replace('}', '\\}')
@@ -338,15 +756,13 @@ class MathRenderer:
             safe = safe.replace('%', '\\%')
             safe = safe.replace('$', '\\$')
             safe = safe.replace('#', '\\#')
-            debug_log(f"_to_latex_safe: fallback escape -> '{safe[:80]}'")
             return safe
         except Exception:
             return None
 
     @classmethod
     def _sympy_convert(cls, expr):
-        """تبدیل با SymPy - با مدیریت خطای بهتر"""
-        # اگه چند تا = داره (مثل a=1, b=5)، فقط اولی رو معادله بگیر
+        """تبدیل با SymPy"""
         if expr.count('=') == 1:
             parts = expr.split('=', 1)
             lhs_str = parts[0].strip()
@@ -359,52 +775,38 @@ class MathRenderer:
                 lhs = parse_expr(lhs_str, transformations=TRANSFORMATIONS)
                 rhs = parse_expr(rhs_str if rhs_str else '0', transformations=TRANSFORMATIONS)
                 result = f"{sympy_latex(lhs)} = {sympy_latex(rhs)}"
-                # تبدیل Delta و بقیه
-                result = result.replace('Delta', '\\Delta')
-                result = result.replace('alpha', '\\alpha')
-                result = result.replace('beta', '\\beta')
-                result = result.replace('gamma', '\\gamma')
-                result = result.replace('theta', '\\theta')
-                result = result.replace('lambda', '\\lambda')
-                result = result.replace('mu', '\\mu')
-                result = result.replace('sigma', '\\sigma')
-                result = result.replace('phi', '\\phi')
-                result = result.replace('omega', '\\omega')
-                result = result.replace('pi', '\\pi')
-                return result
+                return cls._fix_greek_letters(result)
             except Exception:
                 pass
 
-        # بدون = یا با چندتا = : تلاش برای parse کل عبارت
         try:
             parsed = parse_expr(expr, transformations=TRANSFORMATIONS)
             result = sympy_latex(parsed)
-            result = result.replace('Delta', '\\Delta')
-            result = result.replace('alpha', '\\alpha')
-            result = result.replace('beta', '\\beta')
-            result = result.replace('gamma', '\\gamma')
-            result = result.replace('theta', '\\theta')
-            result = result.replace('lambda', '\\lambda')
-            result = result.replace('mu', '\\mu')
-            result = result.replace('sigma', '\\sigma')
-            result = result.replace('phi', '\\phi')
-            result = result.replace('omega', '\\omega')
-            result = result.replace('pi', '\\pi')
-            return result
+            return cls._fix_greek_letters(result)
         except Exception:
             return None
 
     @classmethod
-    def _manual_convert(cls, expr):
-        """تبدیل دستی - با regex امن"""
+    def _fix_greek_letters(cls, latex_str: str) -> str:
+        """
+        اصلاح حروف یونانی در LaTeX
+        فقط کلمات مستقل را تبدیل می‌کند (نه داخل کلمات ترکیبی)
+        """
+        if not latex_str:
+            return latex_str
+
+        def replace_greek(match):
+            return f'\\{match.group()}'
+
+        return cls._GREEK_PATTERN.sub(replace_greek, latex_str)
+
+    @classmethod
+    def _manual_convert_safe(cls, expr):
+        """تبدیل دستی امن و بهینه"""
         result = expr
 
-        # این ترتیب مهمه!
-
-        # 1. sqrt(expr) -> \\sqrt{expr}
-        result = re.sub(r'sqrt\(([^()]*(?:\([^()]*\)[^()]*)*)\)', r'\\sqrt{\1}', result)
-        result = re.sub(r'sqrt(\d+)', r'\\sqrt{\1}', result)
-        result = re.sub(r'sqrt([a-zA-Z])', r'\\sqrt{\1}', result)
+        # 1. تبدیل sqrt با الگوریتم بهینه
+        result = cls._convert_sqrt_safe(result)
 
         # 2. توان‌ها
         result = re.sub(r'\^(\d+)', r'^{\1}', result)
@@ -414,20 +816,11 @@ class MathRenderer:
         for func in ['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln', 'exp', 'abs']:
             result = re.sub(rf'\b({func})\b', rf'\\{func}', result)
 
-        # 4. کسر
+        # 4. کسر ساده
         result = re.sub(r'(\w+)\s*/\s*(\w+)', r'\\frac{\1}{\2}', result)
 
-        # 5. یونانی (با \\ نه \D که regex رو خراب میکنه)
-        greek_map = {
-            'Delta': '\\\\Delta', 'Gamma': '\\\\Gamma', 'Theta': '\\\\Theta',
-            'alpha': '\\\\alpha', 'beta': '\\\\beta', 'gamma': '\\\\gamma',
-            'delta': '\\\\delta', 'theta': '\\\\theta', 'lambda': '\\\\lambda',
-            'mu': '\\\\mu', 'sigma': '\\\\sigma', 'phi': '\\\\phi',
-            'omega': '\\\\omega', 'pi': '\\\\pi', 'Sigma': '\\\\Sigma',
-            'Omega': '\\\\Omega', 'Pi': '\\\\Pi', 'epsilon': '\\\\epsilon',
-        }
-        for word, latex_cmd in greek_map.items():
-            result = re.sub(rf'\b{word}\b', latex_cmd, result)
+        # 5. یونانی
+        result = cls._fix_greek_letters(result)
 
         # 6. پرانتز
         result = result.replace('[', '{').replace(']', '}')
@@ -441,10 +834,111 @@ class MathRenderer:
         return result
 
     @classmethod
+    def _convert_sqrt_safe(cls, expr: str, max_depth: int = MAX_NESTING_DEPTH) -> str:
+        """
+        تبدیل sqrt با مدیریت عمق محدود
+        انتخاب خودکار الگوریتم بر اساس طول ورودی
+        """
+        # Early return اگر sqrt وجود ندارد
+        if 'sqrt(' not in expr:
+            return expr
+
+        # انتخاب الگوریتم بر اساس طول
+        if len(expr) < SQRT_LIST_THRESHOLD:
+            return cls._convert_sqrt_list(expr, max_depth)
+        else:
+            return cls._convert_sqrt_fast(expr, max_depth)
+
+    @classmethod
+    def _convert_sqrt_list(cls, expr: str, max_depth: int) -> str:
+        """
+        الگوریتم مبتنی بر لیست - برای ورودی‌های کوتاه
+        مزیت: سادگی و خوانایی
+        """
+        result = list(expr)
+        i = 0
+        while i < len(result) - 4:
+            if ''.join(result[i:i+5]) == 'sqrt(':
+                depth = 1
+                j = i + 5
+                while j < len(result) and depth > 0:
+                    if result[j] == '(':
+                        depth += 1
+                        if depth > max_depth:
+                            break
+                    elif result[j] == ')':
+                        depth -= 1
+                    j += 1
+
+                if depth == 0 and j <= len(result):
+                    inner = ''.join(result[i+5:j-1])
+                    replacement = list(f'\\sqrt{{{inner}}}')
+                    result[i:j] = replacement
+                    i += len(replacement)
+                else:
+                    i += 1
+            else:
+                i += 1
+
+        return ''.join(result)
+
+    @classmethod
+    def _convert_sqrt_fast(cls, expr: str, max_depth: int) -> str:
+        """
+        الگوریتم سریع مبتنی بر string builder - برای ورودی‌های بلند
+        مزیت: عملکرد بهتر برای رشته‌های طولانی
+        """
+        parts = []
+        last_end = 0
+        i = 0
+
+        while i < len(expr) - 4:
+            if expr[i:i+5] == 'sqrt(':
+                # اضافه کردن بخش قبل از sqrt
+                if i > last_end:
+                    parts.append(expr[last_end:i])
+
+                # پیدا کردن پرانتز متناظر
+                depth = 1
+                j = i + 5
+                while j < len(expr) and depth > 0:
+                    if expr[j] == '(':
+                        depth += 1
+                        if depth > max_depth:
+                            break
+                    elif expr[j] == ')':
+                        depth -= 1
+                    j += 1
+
+                if depth == 0:
+                    inner = expr[i+5:j-1]
+                    parts.append(f'\\sqrt{{{inner}}}')
+                    i = j
+                    last_end = j
+                else:
+                    # اگر پرانتز بسته نشد، این بخش را نگه دار
+                    parts.append(expr[i:i+5])
+                    i += 5
+                    last_end = i
+            else:
+                i += 1
+
+        # اضافه کردن باقی‌مانده
+        if last_end < len(expr):
+            parts.append(expr[last_end:])
+
+        return ''.join(parts)
+
+    @classmethod
     def _render_png(cls, latex_str, text_color, bg_color, font_size, dpi):
         """رندر LaTeX به PNG"""
+        fig = None
         try:
-            fig, ax = plt.subplots(figsize=(6, 0.5), dpi=dpi, facecolor=bg_color, edgecolor='none')
+            fig, ax = plt.subplots(
+                figsize=(6, 0.5), dpi=dpi,
+                facecolor=bg_color, edgecolor='none'
+            )
+
             ax.set_facecolor(bg_color)
             ax.axis('off')
             ax.set_xlim(0, 1)
@@ -462,10 +956,21 @@ class MathRenderer:
             fig.canvas.draw()
             renderer = fig.canvas.get_renderer()
 
+            # Fallback زنجیره‌ای برای bbox
+            bbox = None
             try:
                 bbox = text_obj.get_tightbbox(renderer)
-            except:
-                bbox = text_obj.get_window_extent(renderer)
+            except Exception:
+                pass
+
+            if bbox is None:
+                try:
+                    bbox = text_obj.get_window_extent(renderer)
+                except Exception:
+                    pass
+
+            if bbox is None:
+                bbox = fig.bbox
 
             if bbox is None or bbox.width == 0 or bbox.height == 0:
                 plt.close(fig)
@@ -478,19 +983,25 @@ class MathRenderer:
             fig.set_size_inches(w, h)
 
             buf = io.BytesIO()
-            fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0.05,
-                       facecolor=bg_color, edgecolor='none')
+            fig.savefig(
+                buf, format='png', dpi=dpi,
+                bbox_inches='tight', pad_inches=0.05,
+                facecolor=bg_color, edgecolor='none'
+            )
             plt.close(fig)
 
             buf.seek(0)
             return f"data:image/png;base64,{base64.b64encode(buf.read()).decode()}"
 
         except Exception:
+            if fig:
+                plt.close(fig)
             return None
 
     @classmethod
     def clear_cache(cls):
-        cls._cache.clear()
+        with QMutexLocker(cls._cache_mutex):
+            cls._cache.clear()
 
 
 # ============================================================================
@@ -501,6 +1012,8 @@ class MathImageLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("mathImage")
+        self.setAccessibleName("رندر ریاضی")
+        self.setAccessibleDescription("تصویر رندر شده فرمول ریاضی")
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setMinimumHeight(20)
@@ -546,12 +1059,17 @@ class MathInput(QTextEdit):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setAccessibleName("ورودی معادله")
+        self.setAccessibleDescription(
+            "فیلد ورود معادله ریاضی. معادله را تایپ کرده و Enter بزنید"
+        )
         self.setFont(FontManager.math(14))
         self.setPlaceholderText("x^2 - 5x + 6 = 0")
         self.setMaximumHeight(48)
         self.setMinimumHeight(42)
         self.setAcceptRichText(False)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setTabChangesFocus(False)
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key.Key_Return and not e.modifiers():
@@ -563,9 +1081,13 @@ class MathInput(QTextEdit):
 
 
 class StepWidget(QFrame):
-    def __init__(self, step, colors, num, parent=None):
+    def __init__(self, step, colors, num, total, parent=None):
         super().__init__(parent)
         self.setObjectName("card")
+        self.setAccessibleName(f"گام {num} از {total}")
+        self.setAccessibleDescription(
+            f"گام {num}: {step.title} - {step.description[:50]}"
+        )
         c = colors
 
         shadow = QGraphicsDropShadowEffect()
@@ -579,6 +1101,8 @@ class StepWidget(QFrame):
         layout.setSpacing(10)
 
         num_lbl = QLabel(str(num))
+        num_lbl.setAccessibleName(f"شماره گام {num}")
+        num_lbl.setAccessibleDescription(f"این گام {num} از {total} گام است")
         num_lbl.setFixedSize(26, 26)
         num_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         num_lbl.setFont(FontManager.math(11, True))
@@ -590,6 +1114,7 @@ class StepWidget(QFrame):
         content.setContentsMargins(0, 0, 0, 0)
 
         title = QLabel(step.title)
+        title.setAccessibleName(f"عنوان گام {num}: {step.title}")
         title.setFont(FontManager.ui(13, True))
         title.setStyleSheet(f"color:{c['accent']};")
         content.addWidget(title)
@@ -627,6 +1152,7 @@ class StepWidget(QFrame):
 
     def _add_label(self, layout, text, c, is_primary):
         lbl = QLabel(text)
+        lbl.setAccessibleName(text[:50])
         if is_primary:
             lbl.setFont(FontManager.math(12, True))
             lbl.setStyleSheet(f"color:{c['accent']};background:{c['latex_bg']};padding:4px 8px;border-radius:3px;border-left:2px solid {c['accent']};")
@@ -634,6 +1160,7 @@ class StepWidget(QFrame):
             lbl.setFont(FontManager.math(11))
             lbl.setStyleSheet(f"color:{c['text_secondary']};")
         lbl.setWordWrap(True)
+        lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(lbl)
 
 
@@ -642,26 +1169,38 @@ class HistoryPanel(QWidget):
 
     def __init__(self, colors, parent=None):
         super().__init__(parent)
+        self.setAccessibleName("پنل تاریخچه")
+        self.setAccessibleDescription("لیست معادلات حل شده قبلی")
         self.colors = colors
         self.setMinimumWidth(180)
         self.setMaximumWidth(240)
+
         layout = QVBoxLayout(self)
         layout.setSpacing(5)
         layout.setContentsMargins(0,0,0,0)
+
         hdr = QHBoxLayout()
         title = QLabel("📜 تاریخچه")
         title.setObjectName("titleLabel")
+        title.setAccessibleName("عنوان تاریخچه")
         title.setFont(FontManager.ui(13, True))
         hdr.addWidget(title, 1)
+
         clear_btn = QPushButton("🗑️")
         clear_btn.setObjectName("iconBtn")
+        clear_btn.setAccessibleName("پاک کردن تاریخچه")
+        clear_btn.setAccessibleDescription("تمام موارد تاریخچه را حذف می‌کند")
+        clear_btn.setToolTip("پاک کردن تاریخچه")
         clear_btn.setFixedSize(26, 26)
         clear_btn.clicked.connect(self._clear)
         hdr.addWidget(clear_btn)
         layout.addLayout(hdr)
+
         scroll = QScrollArea()
+        scroll.setAccessibleName("لیست تاریخچه")
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
         self.container = QWidget()
         self.list_layout = QVBoxLayout(self.container)
         self.list_layout.setSpacing(2)
@@ -670,20 +1209,40 @@ class HistoryPanel(QWidget):
         scroll.setWidget(self.container)
         layout.addWidget(scroll)
 
+        self._history_data = []
+        self._max_items = MAX_HISTORY_ITEMS
+
     def add(self, equation, result, success):
-        while self.list_layout.count() > 51:
+        """افزودن به تاریخچه با مدیریت حافظه"""
+        self._history_data.append({
+            'equation': equation,
+            'result': result,
+            'success': success
+        })
+
+        if len(self._history_data) > self._max_items:
+            self._history_data = self._history_data[-self._max_items:]
+
+        while self.list_layout.count() > self._max_items + 1:
             item = self.list_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+
         btn = QPushButton(equation[:26] + ("…" if len(equation) > 26 else ""))
         btn.setObjectName("historyItem")
+        btn.setAccessibleName(f"معادله تاریخی: {equation[:26]}")
+        btn.setAccessibleDescription(f"معادله: {equation}\nنتیجه: {result}")
+        btn.setToolTip(f"{equation}\nنتیجه: {result}")
         btn.setProperty("success", "true" if success else "false")
         btn.setFont(FontManager.math(10))
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.clicked.connect(lambda: self.equationSelected.emit(equation))
+        btn.clicked.connect(lambda checked, eq=equation: self.equationSelected.emit(eq))
+
         self.list_layout.insertWidget(self.list_layout.count() - 1, btn)
 
     def _clear(self):
+        """پاک کردن کامل تاریخچه"""
+        self._history_data.clear()
         while self.list_layout.count() > 1:
             item = self.list_layout.takeAt(0)
             if item.widget():
@@ -698,6 +1257,10 @@ class EquationSolverWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("حل کننده معادلات")
+        self.setAccessibleName("حل کننده معادلات پیشرفته")
+        self.setAccessibleDescription(
+            "برنامه حل معادلات ریاضی با نمایش گام به گام"
+        )
 
         screen = QApplication.primaryScreen()
         if screen:
@@ -708,21 +1271,51 @@ class EquationSolverWindow(QWidget):
         self.setMinimumSize(900, 600)
         self.resize(w, h)
 
-        self.settings = QSettings("MathAssistant", "FixedV12")
+        self.settings = QSettings("MathAssistant", "PlatinumV13.3.1")
         self.is_dark = self.settings.value("dark_mode", True, type=bool)
         self.colors = Colors.DARK if self.is_dark else Colors.LIGHT
         self.engine = EquationSolverEngine()
         self.solution_cache = None
         self._history_visible = False
+        self._solving = False
+        self._thread = None
+        self._thread_mutex = QMutex()
+
+        # اجرای تست‌ها در حالت DEBUG یا با --test
+        if DEBUG or "--test" in sys.argv:
+            MathRendererTests.run_all()
 
         self._build()
         self._connect()
+        self._setup_shortcuts()
         self._apply_theme()
         self._init_history_state()
 
         g = self.settings.value("geometry")
         if g:
             self.restoreGeometry(g)
+
+        QTimer.singleShot(100, lambda: self.input.setFocus())
+
+    def _setup_shortcuts(self):
+        """تنظیم کلیدهای میانبر"""
+        shortcut_solve = QShortcut(QKeySequence("Ctrl+Return"), self)
+        shortcut_solve.activated.connect(lambda: self._solve(self.input.toPlainText().strip()))
+
+        shortcut_clear = QShortcut(QKeySequence("Ctrl+L"), self)
+        shortcut_clear.activated.connect(self._clear_input)
+
+        shortcut_history = QShortcut(QKeySequence("Ctrl+H"), self)
+        shortcut_history.activated.connect(self._toggle_history)
+
+        shortcut_export = QShortcut(QKeySequence("Ctrl+E"), self)
+        shortcut_export.activated.connect(self._export)
+
+        shortcut_help = QShortcut(QKeySequence("F1"), self)
+        shortcut_help.activated.connect(self._help)
+
+        shortcut_esc = QShortcut(QKeySequence("Escape"), self)
+        shortcut_esc.activated.connect(lambda: self.input.setFocus())
 
     def _init_history_state(self):
         self.history.setVisible(False)
@@ -742,29 +1335,47 @@ class EquationSolverWindow(QWidget):
         hdr = QHBoxLayout()
         self.toggle_btn = QPushButton("📜")
         self.toggle_btn.setObjectName("toggleBtn")
+        self.toggle_btn.setAccessibleName("نمایش/مخفی تاریخچه")
+        self.toggle_btn.setAccessibleDescription(
+            "کلیک کنید تا پنل تاریخچه معادلات حل شده نمایش داده یا مخفی شود"
+        )
+        self.toggle_btn.setToolTip("تاریخچه (Ctrl+H)")
         self.toggle_btn.setFixedSize(32, 32)
         hdr.addWidget(self.toggle_btn)
+
         title = QLabel("🧮 حل کننده معادلات پیشرفته")
         title.setObjectName("titleLabel")
+        title.setAccessibleName("عنوان برنامه")
         title.setFont(FontManager.ui(16, True))
         hdr.addWidget(title, 1)
+
         help_btn = QPushButton("❓")
         help_btn.setObjectName("iconBtn")
+        help_btn.setAccessibleName("راهنما")
+        help_btn.setAccessibleDescription("نمایش راهنمای برنامه")
+        help_btn.setToolTip("راهنما (F1)")
         help_btn.setFixedSize(30, 30)
         help_btn.clicked.connect(self._help)
         hdr.addWidget(help_btn)
+
         self.theme_btn = QPushButton("🌙" if self.is_dark else "☀️")
         self.theme_btn.setObjectName("iconBtn")
+        self.theme_btn.setAccessibleName("تغییر تم")
+        self.theme_btn.setAccessibleDescription("تغییر بین تم تاریک و روشن")
+        self.theme_btn.setToolTip("تغییر تم")
         self.theme_btn.setFixedSize(30, 30)
         hdr.addWidget(self.theme_btn)
         root.addLayout(hdr)
 
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.main_splitter.setHandleWidth(2)
+        self.main_splitter.setAccessibleName("تقسیم‌کننده اصلی")
+
         self.history = HistoryPanel(self.colors)
         self.main_splitter.addWidget(self.history)
 
         center = QWidget()
+        center.setAccessibleName("پنل مرکزی")
         cl = QVBoxLayout(center)
         cl.setSpacing(8)
         cl.setContentsMargins(0,0,0,0)
@@ -775,39 +1386,62 @@ class EquationSolverWindow(QWidget):
         self.main_splitter.setSizes([0, 820, 160])
         root.addWidget(self.main_splitter, 1)
 
-        self.status = QLabel("👋 آماده...")
+        self.status = QLabel("👋 آماده... | Ctrl+Enter حل | F1 راهنما")
         self.status.setObjectName("statusLabel")
+        self.status.setAccessibleName("نوار وضعیت")
+        self.status.setAccessibleDescription("نمایش وضعیت فعلی برنامه و نتایج حل")
         self.status.setFont(FontManager.ui(11))
+        self.status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         root.addWidget(self.status)
 
     def _input_card(self):
         card = QFrame()
         card.setObjectName("card")
+        card.setAccessibleName("کارت ورودی")
+        card.setAccessibleDescription("بخش ورود معادله و دکمه‌های کنترل")
+
         l = QVBoxLayout(card)
         l.setSpacing(8)
         l.setContentsMargins(12, 10, 12, 10)
+
         hdr = QHBoxLayout()
         t = QLabel("✏️ معادله")
         t.setObjectName("titleLabel")
+        t.setAccessibleName("عنوان ورودی")
         t.setFont(FontManager.ui(14, True))
         hdr.addWidget(t, 1)
+
         clr = QPushButton("✕")
         clr.setObjectName("iconBtn")
+        clr.setAccessibleName("پاک کردن ورودی")
+        clr.setAccessibleDescription("پاک کردن فیلد ورود معادله")
+        clr.setToolTip("پاک کردن (Ctrl+L)")
         clr.setFixedSize(26, 26)
         clr.clicked.connect(self._clear_input)
         hdr.addWidget(clr)
         l.addLayout(hdr)
+
         self.input = MathInput()
+        self.input.setToolTip("معادله را وارد کنید (Enter برای حل)")
         l.addWidget(self.input)
+
         btns = QHBoxLayout()
         self.solve_btn = QPushButton("🚀 حل معادله")
         self.solve_btn.setObjectName("accentBtn")
+        self.solve_btn.setAccessibleName("دکمه حل")
+        self.solve_btn.setAccessibleDescription("حل معادله وارد شده و نمایش گام‌ها")
+        self.solve_btn.setToolTip("حل معادله (Enter یا Ctrl+Enter)")
         self.solve_btn.setFont(FontManager.ui(14, True))
         self.solve_btn.setMinimumHeight(40)
+
         self.export_btn = QPushButton("📤 ذخیره")
+        self.export_btn.setAccessibleName("ذخیره نتیجه")
+        self.export_btn.setAccessibleDescription("ذخیره نتیجه حل در فایل")
+        self.export_btn.setToolTip("ذخیره نتیجه (Ctrl+E)")
         self.export_btn.setFont(FontManager.ui(13, True))
         self.export_btn.setMinimumHeight(40)
         self.export_btn.setEnabled(False)
+
         btns.addWidget(self.solve_btn, 3)
         btns.addWidget(self.export_btn, 1)
         l.addLayout(btns)
@@ -816,22 +1450,34 @@ class EquationSolverWindow(QWidget):
     def _output_card(self):
         card = QFrame()
         card.setObjectName("card")
+        card.setAccessibleName("کارت خروجی")
+        card.setAccessibleDescription("بخش نمایش گام‌های حل معادله")
+
         l = QVBoxLayout(card)
         l.setSpacing(6)
         l.setContentsMargins(10, 8, 10, 8)
+
         hdr = QHBoxLayout()
         t = QLabel("📝 گام‌های حل")
         t.setObjectName("titleLabel")
+        t.setAccessibleName("عنوان گام‌ها")
         t.setFont(FontManager.ui(14, True))
         hdr.addWidget(t, 1)
+
         self.stat_summary = QLabel("")
+        self.stat_summary.setAccessibleName("خلاصه آمار")
         self.stat_summary.setFont(FontManager.ui(11))
         self.stat_summary.setStyleSheet(f"color:{self.colors['text_secondary']};")
+        self.stat_summary.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         hdr.addWidget(self.stat_summary)
         l.addLayout(hdr)
+
         self.steps_scroll = QScrollArea()
+        self.steps_scroll.setAccessibleName("گام‌های حل")
+        self.steps_scroll.setAccessibleDescription("لیست گام‌های حل معادله")
         self.steps_scroll.setWidgetResizable(True)
         self.steps_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
         self.steps_widget = QWidget()
         self.steps_layout = QVBoxLayout(self.steps_widget)
         self.steps_layout.setSpacing(4)
@@ -844,23 +1490,40 @@ class EquationSolverWindow(QWidget):
     def _stats_card(self):
         card = QFrame()
         card.setObjectName("card")
+        card.setAccessibleName("کارت آمار")
+        card.setAccessibleDescription("نمایش آمار و اطلاعات معادله حل شده")
         card.setMinimumWidth(150)
         card.setMaximumWidth(185)
+
         l = QVBoxLayout(card)
         l.setSpacing(5)
         l.setContentsMargins(8, 8, 8, 8)
+
         t = QLabel("📊 آمار")
         t.setObjectName("titleLabel")
+        t.setAccessibleName("عنوان آمار")
         t.setFont(FontManager.ui(14, True))
         l.addWidget(t)
+
         self.stats = {}
-        for key in ['type','time','count','degree','complex']:
-            lbl = QLabel("—")
+        stat_labels = {
+            'type': ('نوع:', 'نوع معادله'),
+            'time': ('زمان:', 'زمان اجرا'),
+            'count': ('جواب:', 'تعداد جواب'),
+            'degree': ('درجه:', 'درجه معادله'),
+            'complex': ('پیچیدگی:', 'امتیاز پیچیدگی')
+        }
+        for key, (label, desc) in stat_labels.items():
+            lbl = QLabel(f"{label} —")
+            lbl.setAccessibleName(desc)
+            lbl.setAccessibleDescription(f"نمایش {desc}")
             lbl.setFont(FontManager.ui(11))
             lbl.setStyleSheet(f"color:{self.colors['text_secondary']};")
             lbl.setWordWrap(True)
+            lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             l.addWidget(lbl)
             self.stats[key] = lbl
+
         l.addStretch()
         return card
 
@@ -872,21 +1535,46 @@ class EquationSolverWindow(QWidget):
         self.history.equationSelected.connect(self._load_history)
         self.theme_btn.clicked.connect(self._toggle_theme)
 
+    def _cleanup_thread(self):
+        """پاک‌سازی امن thread قبلی"""
+        with QMutexLocker(self._thread_mutex):
+            if self._thread and self._thread.isRunning():
+                self._thread.requestInterruption()
+                if not self._thread.wait(2000):
+                    self._thread.terminate()
+                    self._thread.wait()
+                self._thread.deleteLater()
+                self._thread = None
+
     @pyqtSlot(str)
     def _solve(self, eq):
         if not eq:
             return
+
+        try:
+            validated_eq = InputValidator.validate(eq)
+        except ValueError as e:
+            CopyableMessageBox.warning(self, "خطای ورودی", str(e))
+            self.status.setText(f"❌ {str(e).split(chr(10))[0]}")
+            self.input.setFocus()
+            return
+
+        self._cleanup_thread()
+
+        self._solving = True
         self.solve_btn.setEnabled(False)
         self.solve_btn.setText("⏳ ...")
         self.status.setText("⏳ در حال حل...")
         QApplication.processEvents()
-        self._thread = SolveThread(self.engine, eq)
+
+        self._thread = SolveThread(self.engine, validated_eq)
         self._thread.finished.connect(self._done)
         self._thread.error.connect(self._err)
         self._thread.start()
 
     @pyqtSlot(EquationSolution)
     def _done(self, sol):
+        self._solving = False
         self.solve_btn.setEnabled(True)
         self.solve_btn.setText("🚀 حل معادله")
         self.export_btn.setEnabled(True)
@@ -896,30 +1584,47 @@ class EquationSolverWindow(QWidget):
             item = self.steps_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+
         MathRenderer.clear_cache()
 
+        total_steps = len(sol.steps)
         for i, step in enumerate(sol.steps, 1):
-            w = StepWidget(step, self.colors, i)
+            w = StepWidget(step, self.colors, i, total_steps)
             self.steps_layout.insertWidget(self.steps_layout.count() - 1, w)
 
-        names = {'LINEAR':'خطی','QUADRATIC':'درجه۲','CUBIC':'درجه۳','POLYNOMIAL':'چندجمله‌ای','RATIONAL':'گویا','SYSTEM':'دستگاه'}
+        names = {
+            'LINEAR':'خطی', 'QUADRATIC':'درجه۲', 'CUBIC':'درجه۳',
+            'POLYNOMIAL':'چندجمله‌ای', 'RATIONAL':'گویا', 'SYSTEM':'دستگاه'
+        }
         a = sol.analysis
         t = names.get(a.equation_type.name, 'نامشخص')
+
         self.stats['type'].setText(f"نوع: {t}")
         self.stats['time'].setText(f"زمان: {sol.execution_time_ms:.0f}ms")
         self.stats['count'].setText(f"جواب: {sol.solution_count}")
         self.stats['degree'].setText(f"درجه: {a.degree}")
         self.stats['complex'].setText(f"پیچیدگی: {a.complexity_score:.0%}")
         self.stat_summary.setText(f"{t} | {str(sol.solutions)[:25]}")
-        self.history.add(sol.original_equation, str(sol.solutions)[:40], sol.solution_count > 0)
-        self.status.setText(f"✅ حل شد — {sol.solution_count} جواب | {sol.execution_time_ms:.0f}ms")
+
+        self.history.add(
+            sol.original_equation,
+            str(sol.solutions)[:40],
+            sol.solution_count > 0
+        )
+
+        self.status.setText(
+            f"✅ حل شد — {sol.solution_count} جواب | {sol.execution_time_ms:.0f}ms"
+        )
         self.steps_scroll.verticalScrollBar().setValue(0)
+        self.input.setFocus()
 
     @pyqtSlot(str)
     def _err(self, msg):
+        self._solving = False
         self.solve_btn.setEnabled(True)
         self.solve_btn.setText("🚀 حل معادله")
         self.status.setText(f"❌ {msg}")
+        self.input.setFocus()
 
     def _clear_input(self):
         self.input.clear()
@@ -936,31 +1641,48 @@ class EquationSolverWindow(QWidget):
         self.toggle_btn.setProperty("active", "true" if self._history_visible else "false")
         self.toggle_btn.style().unpolish(self.toggle_btn)
         self.toggle_btn.style().polish(self.toggle_btn)
-        self.main_splitter.setSizes([200, 620, 160] if self._history_visible else [0, 820, 160])
+        self.main_splitter.setSizes(
+            [200, 620, 160] if self._history_visible else [0, 820, 160]
+        )
         self.main_splitter.updateGeometry()
         self.update()
         QApplication.processEvents()
 
     def _export(self):
         if not self.solution_cache:
-            QMessageBox.information(self, "توجه", "ابتدا حل کنید.")
+            CopyableMessageBox.information(self, "توجه", "ابتدا معادله را حل کنید.")
             return
-        path, _ = QFileDialog.getSaveFileName(self, "ذخیره", "", "Text (*.txt);;JSON (*.json)")
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "ذخیره نتیجه", "",
+            "متن (*.txt);;JSON (*.json)"
+        )
         if not path:
             return
+
         try:
             s = self.solution_cache
             if path.endswith('.json'):
-                json.dump({'equation':s.original_equation,'solutions':str(s.solutions),'steps':[{'title':st.title,'description':st.description} for st in s.steps]}, open(path,'w',encoding='utf-8'), ensure_ascii=False, indent=2)
+                with open(path, 'w', encoding='utf-8') as f:
+                    json.dump({
+                        'equation': s.original_equation,
+                        'solutions': str(s.solutions),
+                        'steps': [
+                            {'title': st.title, 'description': st.description}
+                            for st in s.steps
+                        ],
+                        'export_time': datetime.now().isoformat()
+                    }, f, ensure_ascii=False, indent=2)
             else:
-                with open(path,'w',encoding='utf-8') as f:
+                with open(path, 'w', encoding='utf-8') as f:
                     f.write(f"معادله: {s.original_equation}\n\n")
-                    for i,st in enumerate(s.steps,1):
+                    for i, st in enumerate(s.steps, 1):
                         f.write(f"گام {i}: {st.title}\n{st.description}\n\n")
                     f.write(f"جواب: {s.solutions}\n")
-            self.status.setText("✅ ذخیره شد")
+
+            self.status.setText("✅ نتیجه با موفقیت ذخیره شد")
         except Exception as e:
-            QMessageBox.critical(self,"خطا",str(e))
+            CopyableMessageBox.critical(self, "خطا", f"خطا در ذخیره‌سازی:\n{str(e)}")
 
     def _toggle_theme(self):
         self.is_dark = not self.is_dark
@@ -971,15 +1693,48 @@ class EquationSolverWindow(QWidget):
 
     def _apply_theme(self):
         self.setStyleSheet(stylesheet(self.colors))
-        self.stat_summary.setStyleSheet(f"color:{self.colors['text_secondary']};")
+
+        if hasattr(self, 'stat_summary'):
+            self.stat_summary.setStyleSheet(
+                f"color:{self.colors['text_secondary']};"
+            )
+
         for lbl in self.stats.values():
             lbl.setStyleSheet(f"color:{self.colors['text_secondary']};")
+
         self.history.colors = self.colors
+        self.update()
 
     def _help(self):
-        QMessageBox.information(self,"راهنما","📚 نحوه وارد کردن:\n\n• x^2 - 5x + 6 = 0\n• 2x + 5 = 10\n• sin(x) + cos(x) = 1\n\n📜 تاریخچه: باز/بسته\n⌨️ Enter: حل")
+        help_text = (
+            "📚 راهنمای حل کننده معادلات\n\n"
+            "📝 نحوه وارد کردن:\n"
+            "• x^2 - 5x + 6 = 0\n"
+            "• 2x + 5 = 10\n"
+            "• sin(x) + cos(x) = 1\n"
+            "• x^3 - 3x + 1 = 0\n"
+            "• sqrt(x) + sqrt(y) = 5\n\n"
+            "⌨️ کلیدهای میانبر:\n"
+            "• Enter یا Ctrl+Enter: حل معادله\n"
+            "• Ctrl+L: پاک کردن ورودی\n"
+            "• Ctrl+H: نمایش/مخفی تاریخچه\n"
+            "• Ctrl+E: ذخیره نتیجه\n"
+            "• F1: راهنما\n"
+            "• Escape: بازگشت به ورودی\n\n"
+            "📜 تاریخچه: باز/بسته با دکمه یا Ctrl+H\n\n"
+            "⚠️ محدودیت‌ها:\n"
+            f"• حداکثر طول عبارت: {MAX_INPUT_LENGTH} کاراکتر\n"
+            f"• حداکثر عمق پرانتز: {MAX_NESTING_DEPTH}\n"
+            "• از کلمات فارسی در معادله استفاده نکنید\n"
+            "• کاراکترهای خاص غیرمجاز شناسایی می‌شوند"
+        )
+
+        CopyableMessageBox.information(self, "راهنما", help_text)
 
     def closeEvent(self, e):
+        """پاک‌سازی کامل هنگام بستن برنامه"""
+        self._cleanup_thread()
+        MathRenderer.clear_cache()
         self.settings.setValue("geometry", self.saveGeometry())
         super().closeEvent(e)
 
@@ -992,19 +1747,47 @@ class SolveThread(QThread):
         super().__init__()
         self.engine = engine
         self.equation = equation
+        self._mutex = QMutex()
 
     def run(self):
         try:
-            self.finished.emit(self.engine.solve(self.equation))
+            if self.isInterruptionRequested():
+                return
+
+            with QMutexLocker(self._mutex):
+                if self.isInterruptionRequested():
+                    return
+
+                result = self.engine.solve(self.equation)
+
+                if not self.isInterruptionRequested():
+                    self.finished.emit(result)
+
         except Exception as e:
-            self.error.emit(str(e))
+            if not self.isInterruptionRequested():
+                self.error.emit(str(e))
 
 
 def main():
+    # اجرای تست‌ها قبل از شروع GUI اگر --test داده شده
+    if "--test" in sys.argv:
+        passed, failed = MathRendererTests.run_all()
+        sys.exit(0 if failed == 0 else 1)
+
     app = QApplication(sys.argv)
-    app.setApplicationName("MathAssistant Pro")
+    app.setApplicationName("MathAssistant Pro Platinum")
+    app.setOrganizationName("MathAssistant")
     app.setFont(FontManager.ui(11))
     app.setStyle('Fusion')
+
+    app.setStyleSheet("""
+        QToolTip {
+            font: 11px 'B Nazanin';
+            padding: 4px;
+            border-radius: 4px;
+        }
+    """)
+
     w = EquationSolverWindow()
     w.show()
     sys.exit(app.exec())
