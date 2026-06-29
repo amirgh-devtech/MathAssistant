@@ -1,4 +1,5 @@
 # MathAssistant APP
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-developed by: AmirMohammad Ghasemzadeh
+_This project is licensed under the MIT License - see the LICENSE file for details._
+
+**developed by: AmirMohammad Ghasemzadeh**
