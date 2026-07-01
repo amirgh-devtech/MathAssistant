@@ -1,0 +1,127 @@
+{
+  "build_version": "1.0.0",
+  "node_version": "22.21.1",
+  "build_command": "npx grunt build --locale=fa",
+  "output_dir": "build/adapted-from-phet",
+
+  "simulations": {
+    "ohms-law": {
+      "name_fa": "قانون اهم",
+      "grade": 8,
+      "subject": "علوم",
+      "chapter": "فصل ۶ - الکتریسیته",
+      "dependencies": ["babel"],
+      "output_file": "ohms-law_all_adapted-from-phet.html"
+    },
+    "projectile-motion": {
+      "name_fa": "حرکت پرتابه",
+      "grade": 9,
+      "subject": "علوم",
+      "chapter": "فصل ۳ - حرکت",
+      "dependencies": ["babel", "twixt"],
+      "output_file": "projectile-motion_all_adapted-from-phet.html"
+    },
+    "build-an-atom": {
+      "name_fa": "اتم بسازید",
+      "grade": 7,
+      "subject": "علوم",
+      "chapter": "فصل ۳ - اتم‌ها",
+      "dependencies": ["babel", "shred", "vegas"],
+      "output_file": "build-an-atom_all_adapted-from-phet.html"
+    },
+    "forces-and-motion-basics": {
+      "name_fa": "نیروها و حرکت",
+      "grade": 8,
+      "subject": "علوم",
+      "chapter": "فصل ۷ - نیرو",
+      "dependencies": ["babel"],
+      "output_file": "forces-and-motion-basics_all_adapted-from-phet.html"
+    },
+    "energy-skate-park": {
+      "name_fa": "پارک اسکیت انرژی",
+      "grade": 8,
+      "subject": "علوم",
+      "chapter": "فصل ۸ - انرژی",
+      "dependencies": ["babel", "griddle"],
+      "output_file": "energy-skate-park_all_adapted-from-phet.html"
+    },
+    "balloons-and-static-electricity": {
+      "name_fa": "بادکنک و الکتریسیته ساکن",
+      "grade": 8,
+      "subject": "علوم",
+      "chapter": "فصل ۶ - الکتریسیته",
+      "dependencies": ["babel"],
+      "output_file": "balloons-and-static-electricity_all_adapted-from-phet.html"
+    },
+    "reactants-products-and-leftovers": {
+      "name_fa": "واکنش‌دهنده‌ها و فرآورده‌ها",
+      "grade": 9,
+      "subject": "علوم",
+      "chapter": "فصل ۲ - واکنش‌های شیمیایی",
+      "dependencies": ["babel", "nitroglycerin"],
+      "output_file": "reactants-products-and-leftovers_all_adapted-from-phet.html"
+    },
+    "ph-scale": {
+      "name_fa": "مقیاس pH",
+      "grade": 9,
+      "subject": "علوم",
+      "chapter": "فصل ۱ - مواد و تغییرات",
+      "dependencies": ["babel"],
+      "output_file": "ph-scale_all_adapted-from-phet.html"
+    },
+    "graphing-lines": {
+      "name_fa": "رسم خطوط",
+      "grade": 7,
+      "subject": "ریاضی",
+      "chapter": "فصل ۵ - معادلات خطی",
+      "dependencies": ["babel"],
+      "output_file": "graphing-lines_all_adapted-from-phet.html"
+    },
+    "area-builder": {
+      "name_fa": "مساحت",
+      "grade": 7,
+      "subject": "ریاضی",
+      "chapter": "فصل ۳ - مساحت",
+      "dependencies": ["babel"],
+      "output_file": "area-builder_all_adapted-from-phet.html"
+    }
+  },
+
+  "shared_dependencies": {
+    "common_repos": [
+      "chipper",
+      "perennial",
+      "perennial-alias",
+      "sherpa",
+      "brand",
+      "phet-core",
+      "assert",
+      "axon",
+      "tandem",
+      "query-string-machine",
+      "scenery",
+      "scenery-phet",
+      "sun",
+      "joist",
+      "tambo",
+      "kite",
+      "dot",
+      "phetcommon",
+      "utterance-queue"
+    ],
+    "optional_repos": {
+      "twixt": "مورد نیاز برای projectile-motion",
+      "shred": "مورد نیاز برای build-an-atom",
+      "vegas": "مورد نیاز برای build-an-atom",
+      "griddle": "مورد نیاز برای energy-skate-park",
+      "nitroglycerin": "مورد نیاز برای reactants-products-and-leftovers"
+    }
+  },
+
+  "font_injection": {
+    "enabled": true,
+    "font_family": "B Nazanin",
+    "font_file": "fonts/B-Nazanin.ttf",
+    "css_template": "@font-face{font-family:'{family}';src:url('{path}') format('truetype');}body,div,span,p,button,input,select,textarea{font-family:'{family}',Tahoma,sans-serif!important;}"
+  }
+}
