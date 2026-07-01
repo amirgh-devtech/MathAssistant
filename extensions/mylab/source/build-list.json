@@ -1,127 +1,1104 @@
-{
-  "build_version": "1.0.0",
-  "node_version": "22.21.1",
-  "build_command": "npx grunt build --locale=fa",
-  "output_dir": "build/adapted-from-phet",
-
-  "simulations": {
-    "ohms-law": {
-      "name_fa": "قانون اهم",
-      "grade": 8,
-      "subject": "علوم",
-      "chapter": "فصل ۶ - الکتریسیته",
-      "dependencies": ["babel"],
-      "output_file": "ohms-law_all_adapted-from-phet.html"
-    },
-    "projectile-motion": {
-      "name_fa": "حرکت پرتابه",
-      "grade": 9,
-      "subject": "علوم",
-      "chapter": "فصل ۳ - حرکت",
-      "dependencies": ["babel", "twixt"],
-      "output_file": "projectile-motion_all_adapted-from-phet.html"
-    },
-    "build-an-atom": {
-      "name_fa": "اتم بسازید",
-      "grade": 7,
-      "subject": "علوم",
-      "chapter": "فصل ۳ - اتم‌ها",
-      "dependencies": ["babel", "shred", "vegas"],
-      "output_file": "build-an-atom_all_adapted-from-phet.html"
-    },
-    "forces-and-motion-basics": {
-      "name_fa": "نیروها و حرکت",
-      "grade": 8,
-      "subject": "علوم",
-      "chapter": "فصل ۷ - نیرو",
-      "dependencies": ["babel"],
-      "output_file": "forces-and-motion-basics_all_adapted-from-phet.html"
-    },
-    "energy-skate-park": {
-      "name_fa": "پارک اسکیت انرژی",
-      "grade": 8,
-      "subject": "علوم",
-      "chapter": "فصل ۸ - انرژی",
-      "dependencies": ["babel", "griddle"],
-      "output_file": "energy-skate-park_all_adapted-from-phet.html"
-    },
-    "balloons-and-static-electricity": {
-      "name_fa": "بادکنک و الکتریسیته ساکن",
-      "grade": 8,
-      "subject": "علوم",
-      "chapter": "فصل ۶ - الکتریسیته",
-      "dependencies": ["babel"],
-      "output_file": "balloons-and-static-electricity_all_adapted-from-phet.html"
-    },
-    "reactants-products-and-leftovers": {
-      "name_fa": "واکنش‌دهنده‌ها و فرآورده‌ها",
-      "grade": 9,
-      "subject": "علوم",
-      "chapter": "فصل ۲ - واکنش‌های شیمیایی",
-      "dependencies": ["babel", "nitroglycerin"],
-      "output_file": "reactants-products-and-leftovers_all_adapted-from-phet.html"
-    },
-    "ph-scale": {
-      "name_fa": "مقیاس pH",
-      "grade": 9,
-      "subject": "علوم",
-      "chapter": "فصل ۱ - مواد و تغییرات",
-      "dependencies": ["babel"],
-      "output_file": "ph-scale_all_adapted-from-phet.html"
-    },
-    "graphing-lines": {
-      "name_fa": "رسم خطوط",
-      "grade": 7,
-      "subject": "ریاضی",
-      "chapter": "فصل ۵ - معادلات خطی",
-      "dependencies": ["babel"],
-      "output_file": "graphing-lines_all_adapted-from-phet.html"
-    },
-    "area-builder": {
-      "name_fa": "مساحت",
-      "grade": 7,
-      "subject": "ریاضی",
-      "chapter": "فصل ۳ - مساحت",
-      "dependencies": ["babel"],
-      "output_file": "area-builder_all_adapted-from-phet.html"
-    }
-  },
-
-  "shared_dependencies": {
-    "common_repos": [
-      "chipper",
-      "perennial",
-      "perennial-alias",
-      "sherpa",
-      "brand",
-      "phet-core",
-      "assert",
-      "axon",
-      "tandem",
-      "query-string-machine",
-      "scenery",
-      "scenery-phet",
-      "sun",
-      "joist",
-      "tambo",
-      "kite",
-      "dot",
-      "phetcommon",
-      "utterance-queue"
-    ],
-    "optional_repos": {
-      "twixt": "مورد نیاز برای projectile-motion",
-      "shred": "مورد نیاز برای build-an-atom",
-      "vegas": "مورد نیاز برای build-an-atom",
-      "griddle": "مورد نیاز برای energy-skate-park",
-      "nitroglycerin": "مورد نیاز برای reactants-products-and-leftovers"
-    }
-  },
-
-  "font_injection": {
-    "enabled": true,
-    "font_family": "B Nazanin",
-    "font_file": "fonts/B-Nazanin.ttf",
-    "css_template": "@font-face{font-family:'{family}';src:url('{path}') format('truetype');}body,div,span,p,button,input,select,textarea{font-family:'{family}',Tahoma,sans-serif!important;}"
-  }
+﻿{
+    "build_version":  "1.0.0",
+    "node_version":  "22.21.1",
+    "build_command":  "npx grunt build --locale=fa",
+    "output_dir":  "build/adapted-from-phet",
+    "simulations":  {
+                        "fractions-intro":  {
+                                                "name_fa":  "",
+                                                "subject":  "",
+                                                "output_file":  "fractions-intro_all_adapted-from-phet.html",
+                                                "dependencies":  [
+                                                                     "babel"
+                                                                 ],
+                                                "chapter":  "",
+                                                "grade":  0
+                                            },
+                        "diffusion":  {
+                                          "name_fa":  "",
+                                          "subject":  "",
+                                          "output_file":  "diffusion_all_adapted-from-phet.html",
+                                          "dependencies":  [
+                                                               "babel"
+                                                           ],
+                                          "chapter":  "",
+                                          "grade":  0
+                                      },
+                        "function-builder":  {
+                                                 "name_fa":  "",
+                                                 "subject":  "",
+                                                 "output_file":  "function-builder_all_adapted-from-phet.html",
+                                                 "dependencies":  [
+                                                                      "babel"
+                                                                  ],
+                                                 "chapter":  "",
+                                                 "grade":  0
+                                             },
+                        "equality-explorer-basics":  {
+                                                         "name_fa":  "",
+                                                         "subject":  "",
+                                                         "output_file":  "equality-explorer-basics_all_adapted-from-phet.html",
+                                                         "dependencies":  [
+                                                                              "babel"
+                                                                          ],
+                                                         "chapter":  "",
+                                                         "grade":  0
+                                                     },
+                        "graphing-slope-intercept":  {
+                                                         "name_fa":  "",
+                                                         "subject":  "",
+                                                         "output_file":  "graphing-slope-intercept_all_adapted-from-phet.html",
+                                                         "dependencies":  [
+                                                                              "babel"
+                                                                          ],
+                                                         "chapter":  "",
+                                                         "grade":  0
+                                                     },
+                        "number-line-integers":  {
+                                                     "name_fa":  "",
+                                                     "subject":  "",
+                                                     "output_file":  "number-line-integers_all_adapted-from-phet.html",
+                                                     "dependencies":  [
+                                                                          "babel"
+                                                                      ],
+                                                     "chapter":  "",
+                                                     "grade":  0
+                                                 },
+                        "balancing-chemical-equations":  {
+                                                             "name_fa":  "",
+                                                             "subject":  "",
+                                                             "output_file":  "balancing-chemical-equations_all_adapted-from-phet.html",
+                                                             "dependencies":  [
+                                                                                  "babel"
+                                                                              ],
+                                                             "chapter":  "",
+                                                             "grade":  0
+                                                         },
+                        "center-and-variability":  {
+                                                       "name_fa":  "",
+                                                       "subject":  "",
+                                                       "output_file":  "center-and-variability_all_adapted-from-phet.html",
+                                                       "dependencies":  [
+                                                                            "babel"
+                                                                        ],
+                                                       "chapter":  "",
+                                                       "grade":  0
+                                                   },
+                        "number-line-distance":  {
+                                                     "name_fa":  "",
+                                                     "subject":  "",
+                                                     "output_file":  "number-line-distance_all_adapted-from-phet.html",
+                                                     "dependencies":  [
+                                                                          "babel"
+                                                                      ],
+                                                     "chapter":  "",
+                                                     "grade":  0
+                                                 },
+                        "ohms-law":  {
+                                         "name_fa":  "",
+                                         "subject":  "",
+                                         "output_file":  "ohms-law_all_adapted-from-phet.html",
+                                         "dependencies":  [
+                                                              "babel"
+                                                          ],
+                                         "chapter":  "",
+                                         "grade":  0
+                                     },
+                        "friction":  {
+                                         "name_fa":  "",
+                                         "subject":  "",
+                                         "output_file":  "friction_all_adapted-from-phet.html",
+                                         "dependencies":  [
+                                                              "babel"
+                                                          ],
+                                         "chapter":  "",
+                                         "grade":  0
+                                     },
+                        "balloons-and-static-electricity":  {
+                                                                "name_fa":  "",
+                                                                "subject":  "",
+                                                                "output_file":  "balloons-and-static-electricity_all_adapted-from-phet.html",
+                                                                "dependencies":  [
+                                                                                     "babel"
+                                                                                 ],
+                                                                "chapter":  "",
+                                                                "grade":  0
+                                                            },
+                        "molecules-and-light":  {
+                                                    "name_fa":  "",
+                                                    "subject":  "",
+                                                    "output_file":  "molecules-and-light_all_adapted-from-phet.html",
+                                                    "dependencies":  [
+                                                                         "babel"
+                                                                     ],
+                                                    "chapter":  "",
+                                                    "grade":  0
+                                                },
+                        "under-pressure":  {
+                                               "name_fa":  "",
+                                               "subject":  "",
+                                               "output_file":  "under-pressure_all_adapted-from-phet.html",
+                                               "dependencies":  [
+                                                                    "babel"
+                                                                ],
+                                               "chapter":  "",
+                                               "grade":  0
+                                           },
+                        "fractions-mixed-numbers":  {
+                                                        "name_fa":  "",
+                                                        "subject":  "",
+                                                        "output_file":  "fractions-mixed-numbers_all_adapted-from-phet.html",
+                                                        "dependencies":  [
+                                                                             "babel"
+                                                                         ],
+                                                        "chapter":  "",
+                                                        "grade":  0
+                                                    },
+                        "wave-interference":  {
+                                                  "name_fa":  "",
+                                                  "subject":  "",
+                                                  "output_file":  "wave-interference_all_adapted-from-phet.html",
+                                                  "dependencies":  [
+                                                                       "babel"
+                                                                   ],
+                                                  "chapter":  "",
+                                                  "grade":  0
+                                              },
+                        "pendulum-lab":  {
+                                             "name_fa":  "",
+                                             "subject":  "",
+                                             "output_file":  "pendulum-lab_all_adapted-from-phet.html",
+                                             "dependencies":  [
+                                                                  "babel"
+                                                              ],
+                                             "chapter":  "",
+                                             "grade":  0
+                                         },
+                        "make-a-ten":  {
+                                           "name_fa":  "",
+                                           "subject":  "",
+                                           "output_file":  "make-a-ten_all_adapted-from-phet.html",
+                                           "dependencies":  [
+                                                                "babel"
+                                                            ],
+                                           "chapter":  "",
+                                           "grade":  0
+                                       },
+                        "build-an-atom":  {
+                                              "name_fa":  "",
+                                              "subject":  "",
+                                              "output_file":  "build-an-atom_all_adapted-from-phet.html",
+                                              "dependencies":  [
+                                                                   "babel"
+                                                               ],
+                                              "chapter":  "",
+                                              "grade":  0
+                                          },
+                        "area-builder":  {
+                                             "name_fa":  "",
+                                             "subject":  "",
+                                             "output_file":  "area-builder_all_adapted-from-phet.html",
+                                             "dependencies":  [
+                                                                  "babel"
+                                                              ],
+                                             "chapter":  "",
+                                             "grade":  0
+                                         },
+                        "collision-lab":  {
+                                              "name_fa":  "",
+                                              "subject":  "",
+                                              "output_file":  "collision-lab_all_adapted-from-phet.html",
+                                              "dependencies":  [
+                                                                   "babel"
+                                                               ],
+                                              "chapter":  "",
+                                              "grade":  0
+                                          },
+                        "states-of-matter":  {
+                                                 "name_fa":  "",
+                                                 "subject":  "",
+                                                 "output_file":  "states-of-matter_all_adapted-from-phet.html",
+                                                 "dependencies":  [
+                                                                      "babel"
+                                                                  ],
+                                                 "chapter":  "",
+                                                 "grade":  0
+                                             },
+                        "quadrilateral":  {
+                                              "name_fa":  "",
+                                              "subject":  "",
+                                              "output_file":  "quadrilateral_all_adapted-from-phet.html",
+                                              "dependencies":  [
+                                                                   "babel"
+                                                               ],
+                                              "chapter":  "",
+                                              "grade":  0
+                                          },
+                        "area-model-algebra":  {
+                                                   "name_fa":  "",
+                                                   "subject":  "",
+                                                   "output_file":  "area-model-algebra_all_adapted-from-phet.html",
+                                                   "dependencies":  [
+                                                                        "babel"
+                                                                    ],
+                                                   "chapter":  "",
+                                                   "grade":  0
+                                               },
+                        "color-vision":  {
+                                             "name_fa":  "",
+                                             "subject":  "",
+                                             "output_file":  "color-vision_all_adapted-from-phet.html",
+                                             "dependencies":  [
+                                                                  "babel"
+                                                              ],
+                                             "chapter":  "",
+                                             "grade":  0
+                                         },
+                        "build-a-fraction":  {
+                                                 "name_fa":  "",
+                                                 "subject":  "",
+                                                 "output_file":  "build-a-fraction_all_adapted-from-phet.html",
+                                                 "dependencies":  [
+                                                                      "babel"
+                                                                  ],
+                                                 "chapter":  "",
+                                                 "grade":  0
+                                             },
+                        "fourier-making-waves":  {
+                                                     "name_fa":  "",
+                                                     "subject":  "",
+                                                     "output_file":  "fourier-making-waves_all_adapted-from-phet.html",
+                                                     "dependencies":  [
+                                                                          "babel"
+                                                                      ],
+                                                     "chapter":  "",
+                                                     "grade":  0
+                                                 },
+                        "acid-base-solutions":  {
+                                                    "name_fa":  "",
+                                                    "subject":  "",
+                                                    "output_file":  "acid-base-solutions_all_adapted-from-phet.html",
+                                                    "dependencies":  [
+                                                                         "babel"
+                                                                     ],
+                                                    "chapter":  "",
+                                                    "grade":  0
+                                                },
+                        "least-squares-regression":  {
+                                                         "name_fa":  "",
+                                                         "subject":  "",
+                                                         "output_file":  "least-squares-regression_all_adapted-from-phet.html",
+                                                         "dependencies":  [
+                                                                              "babel"
+                                                                          ],
+                                                         "chapter":  "",
+                                                         "grade":  0
+                                                     },
+                        "plinko-probability":  {
+                                                   "name_fa":  "",
+                                                   "subject":  "",
+                                                   "output_file":  "plinko-probability_all_adapted-from-phet.html",
+                                                   "dependencies":  [
+                                                                        "babel"
+                                                                    ],
+                                                   "chapter":  "",
+                                                   "grade":  0
+                                               },
+                        "projectile-motion":  {
+                                                  "name_fa":  "",
+                                                  "subject":  "",
+                                                  "output_file":  "projectile-motion_all_adapted-from-phet.html",
+                                                  "dependencies":  [
+                                                                       "babel"
+                                                                   ],
+                                                  "chapter":  "",
+                                                  "grade":  0
+                                              },
+                        "forces-and-motion-basics":  {
+                                                         "name_fa":  "",
+                                                         "subject":  "",
+                                                         "output_file":  "forces-and-motion-basics_all_adapted-from-phet.html",
+                                                         "dependencies":  [
+                                                                              "babel"
+                                                                          ],
+                                                         "chapter":  "",
+                                                         "grade":  0
+                                                     },
+                        "beers-law-lab":  {
+                                              "name_fa":  "",
+                                              "subject":  "",
+                                              "output_file":  "beers-law-lab_all_adapted-from-phet.html",
+                                              "dependencies":  [
+                                                                   "babel"
+                                                               ],
+                                              "chapter":  "",
+                                              "grade":  0
+                                          },
+                        "reactants-products-and-leftovers":  {
+                                                                 "name_fa":  "",
+                                                                 "subject":  "",
+                                                                 "output_file":  "reactants-products-and-leftovers_all_adapted-from-phet.html",
+                                                                 "dependencies":  [
+                                                                                      "babel"
+                                                                                  ],
+                                                                 "chapter":  "",
+                                                                 "grade":  0
+                                                             },
+                        "circuit-construction-kit-dc":  {
+                                                            "name_fa":  "",
+                                                            "subject":  "",
+                                                            "output_file":  "circuit-construction-kit-dc_all_adapted-from-phet.html",
+                                                            "dependencies":  [
+                                                                                 "babel"
+                                                                             ],
+                                                            "chapter":  "",
+                                                            "grade":  0
+                                                        },
+                        "gravity-and-orbits":  {
+                                                   "name_fa":  "",
+                                                   "subject":  "",
+                                                   "output_file":  "gravity-and-orbits_all_adapted-from-phet.html",
+                                                   "dependencies":  [
+                                                                        "babel"
+                                                                    ],
+                                                   "chapter":  "",
+                                                   "grade":  0
+                                               },
+                        "geometric-optics-basics":  {
+                                                        "name_fa":  "",
+                                                        "subject":  "",
+                                                        "output_file":  "geometric-optics-basics_all_adapted-from-phet.html",
+                                                        "dependencies":  [
+                                                                             "babel"
+                                                                         ],
+                                                        "chapter":  "",
+                                                        "grade":  0
+                                                    },
+                        "fraction-comparison":  {
+                                                    "name_fa":  "",
+                                                    "subject":  "",
+                                                    "output_file":  "fraction-comparison_all_adapted-from-phet.html",
+                                                    "dependencies":  [
+                                                                         "babel"
+                                                                     ],
+                                                    "chapter":  "",
+                                                    "grade":  0
+                                                },
+                        "charges-and-fields":  {
+                                                   "name_fa":  "",
+                                                   "subject":  "",
+                                                   "output_file":  "charges-and-fields_all_adapted-from-phet.html",
+                                                   "dependencies":  [
+                                                                        "babel"
+                                                                    ],
+                                                   "chapter":  "",
+                                                   "grade":  0
+                                               },
+                        "energy-skate-park-basics":  {
+                                                         "name_fa":  "",
+                                                         "subject":  "",
+                                                         "output_file":  "energy-skate-park-basics_all_adapted-from-phet.html",
+                                                         "dependencies":  [
+                                                                              "babel"
+                                                                          ],
+                                                         "chapter":  "",
+                                                         "grade":  0
+                                                     },
+                        "capacitor-lab-basics":  {
+                                                     "name_fa":  "",
+                                                     "subject":  "",
+                                                     "output_file":  "capacitor-lab-basics_all_adapted-from-phet.html",
+                                                     "dependencies":  [
+                                                                          "babel"
+                                                                      ],
+                                                     "chapter":  "",
+                                                     "grade":  0
+                                                 },
+                        "density":  {
+                                        "name_fa":  "",
+                                        "subject":  "",
+                                        "output_file":  "density_all_adapted-from-phet.html",
+                                        "dependencies":  [
+                                                             "babel"
+                                                         ],
+                                        "chapter":  "",
+                                        "grade":  0
+                                    },
+                        "buoyancy":  {
+                                         "name_fa":  "",
+                                         "subject":  "",
+                                         "output_file":  "buoyancy_all_adapted-from-phet.html",
+                                         "dependencies":  [
+                                                              "babel"
+                                                          ],
+                                         "chapter":  "",
+                                         "grade":  0
+                                     },
+                        "isotopes-and-atomic-mass":  {
+                                                         "name_fa":  "",
+                                                         "subject":  "",
+                                                         "output_file":  "isotopes-and-atomic-mass_all_adapted-from-phet.html",
+                                                         "dependencies":  [
+                                                                              "babel"
+                                                                          ],
+                                                         "chapter":  "",
+                                                         "grade":  0
+                                                     },
+                        "concentration":  {
+                                              "name_fa":  "",
+                                              "subject":  "",
+                                              "output_file":  "concentration_all_adapted-from-phet.html",
+                                              "dependencies":  [
+                                                                   "babel"
+                                                               ],
+                                              "chapter":  "",
+                                              "grade":  0
+                                          },
+                        "molecule-shapes-basics":  {
+                                                       "name_fa":  "",
+                                                       "subject":  "",
+                                                       "output_file":  "molecule-shapes-basics_all_adapted-from-phet.html",
+                                                       "dependencies":  [
+                                                                            "babel"
+                                                                        ],
+                                                       "chapter":  "",
+                                                       "grade":  0
+                                                   },
+                        "gas-properties":  {
+                                               "name_fa":  "",
+                                               "subject":  "",
+                                               "output_file":  "gas-properties_all_adapted-from-phet.html",
+                                               "dependencies":  [
+                                                                    "babel"
+                                                                ],
+                                               "chapter":  "",
+                                               "grade":  0
+                                           },
+                        "circuit-construction-kit-ac-virtual-lab":  {
+                                                                        "name_fa":  "",
+                                                                        "subject":  "",
+                                                                        "output_file":  "circuit-construction-kit-ac-virtual-lab_all_adapted-from-phet.html",
+                                                                        "dependencies":  [
+                                                                                             "babel"
+                                                                                         ],
+                                                                        "chapter":  "",
+                                                                        "grade":  0
+                                                                    },
+                        "mean-share-and-balance":  {
+                                                       "name_fa":  "",
+                                                       "subject":  "",
+                                                       "output_file":  "mean-share-and-balance_all_adapted-from-phet.html",
+                                                       "dependencies":  [
+                                                                            "babel"
+                                                                        ],
+                                                       "chapter":  "",
+                                                       "grade":  0
+                                                   },
+                        "function-builder-basics":  {
+                                                        "name_fa":  "",
+                                                        "subject":  "",
+                                                        "output_file":  "function-builder-basics_all_adapted-from-phet.html",
+                                                        "dependencies":  [
+                                                                             "babel"
+                                                                         ],
+                                                        "chapter":  "",
+                                                        "grade":  0
+                                                    },
+                        "waves-intro":  {
+                                            "name_fa":  "",
+                                            "subject":  "",
+                                            "output_file":  "waves-intro_all_adapted-from-phet.html",
+                                            "dependencies":  [
+                                                                 "babel"
+                                                             ],
+                                            "chapter":  "",
+                                            "grade":  0
+                                        },
+                        "proportion-playground":  {
+                                                      "name_fa":  "",
+                                                      "subject":  "",
+                                                      "output_file":  "proportion-playground_all_adapted-from-phet.html",
+                                                      "dependencies":  [
+                                                                           "babel"
+                                                                       ],
+                                                      "chapter":  "",
+                                                      "grade":  0
+                                                  },
+                        "molecule-polarity":  {
+                                                  "name_fa":  "",
+                                                  "subject":  "",
+                                                  "output_file":  "molecule-polarity_all_adapted-from-phet.html",
+                                                  "dependencies":  [
+                                                                       "babel"
+                                                                   ],
+                                                  "chapter":  "",
+                                                  "grade":  0
+                                              },
+                        "expression-exchange":  {
+                                                    "name_fa":  "",
+                                                    "subject":  "",
+                                                    "output_file":  "expression-exchange_all_adapted-from-phet.html",
+                                                    "dependencies":  [
+                                                                         "babel"
+                                                                     ],
+                                                    "chapter":  "",
+                                                    "grade":  0
+                                                },
+                        "fraction-matcher":  {
+                                                 "name_fa":  "",
+                                                 "subject":  "",
+                                                 "output_file":  "fraction-matcher_all_adapted-from-phet.html",
+                                                 "dependencies":  [
+                                                                      "babel"
+                                                                  ],
+                                                 "chapter":  "",
+                                                 "grade":  0
+                                             },
+                        "equality-explorer-two-variables":  {
+                                                                "name_fa":  "",
+                                                                "subject":  "",
+                                                                "output_file":  "equality-explorer-two-variables_all_adapted-from-phet.html",
+                                                                "dependencies":  [
+                                                                                     "babel"
+                                                                                 ],
+                                                                "chapter":  "",
+                                                                "grade":  0
+                                                            },
+                        "balancing-act":  {
+                                              "name_fa":  "",
+                                              "subject":  "",
+                                              "output_file":  "balancing-act_all_adapted-from-phet.html",
+                                              "dependencies":  [
+                                                                   "babel"
+                                                               ],
+                                              "chapter":  "",
+                                              "grade":  0
+                                          },
+                        "rutherford-scattering":  {
+                                                      "name_fa":  "",
+                                                      "subject":  "",
+                                                      "output_file":  "rutherford-scattering_all_adapted-from-phet.html",
+                                                      "dependencies":  [
+                                                                           "babel"
+                                                                       ],
+                                                      "chapter":  "",
+                                                      "grade":  0
+                                                  },
+                        "equality-explorer":  {
+                                                  "name_fa":  "",
+                                                  "subject":  "",
+                                                  "output_file":  "equality-explorer_all_adapted-from-phet.html",
+                                                  "dependencies":  [
+                                                                       "babel"
+                                                                   ],
+                                                  "chapter":  "",
+                                                  "grade":  0
+                                              },
+                        "vector-addition":  {
+                                                "name_fa":  "",
+                                                "subject":  "",
+                                                "output_file":  "vector-addition_all_adapted-from-phet.html",
+                                                "dependencies":  [
+                                                                     "babel"
+                                                                 ],
+                                                "chapter":  "",
+                                                "grade":  0
+                                            },
+                        "graphing-lines":  {
+                                               "name_fa":  "",
+                                               "subject":  "",
+                                               "output_file":  "graphing-lines_all_adapted-from-phet.html",
+                                               "dependencies":  [
+                                                                    "babel"
+                                                                ],
+                                               "chapter":  "",
+                                               "grade":  0
+                                           },
+                        "ph-scale":  {
+                                         "name_fa":  "",
+                                         "subject":  "",
+                                         "output_file":  "ph-scale_all_adapted-from-phet.html",
+                                         "dependencies":  [
+                                                              "babel"
+                                                          ],
+                                         "chapter":  "",
+                                         "grade":  0
+                                     },
+                        "vector-addition-equations":  {
+                                                          "name_fa":  "",
+                                                          "subject":  "",
+                                                          "output_file":  "vector-addition-equations_all_adapted-from-phet.html",
+                                                          "dependencies":  [
+                                                                               "babel"
+                                                                           ],
+                                                          "chapter":  "",
+                                                          "grade":  0
+                                                      },
+                        "fractions-equality":  {
+                                                   "name_fa":  "",
+                                                   "subject":  "",
+                                                   "output_file":  "fractions-equality_all_adapted-from-phet.html",
+                                                   "dependencies":  [
+                                                                        "babel"
+                                                                    ],
+                                                   "chapter":  "",
+                                                   "grade":  0
+                                               },
+                        "photoelectric-effect":  {
+                                                     "name_fa":  "",
+                                                     "subject":  "",
+                                                     "output_file":  "photoelectric-effect_all_adapted-from-phet.html",
+                                                     "dependencies":  [
+                                                                          "babel"
+                                                                      ],
+                                                     "chapter":  "",
+                                                     "grade":  0
+                                                 },
+                        "ph-scale-basics":  {
+                                                "name_fa":  "",
+                                                "subject":  "",
+                                                "output_file":  "ph-scale-basics_all_adapted-from-phet.html",
+                                                "dependencies":  [
+                                                                     "babel"
+                                                                 ],
+                                                "chapter":  "",
+                                                "grade":  0
+                                            },
+                        "number-play":  {
+                                            "name_fa":  "",
+                                            "subject":  "",
+                                            "output_file":  "number-play_all_adapted-from-phet.html",
+                                            "dependencies":  [
+                                                                 "babel"
+                                                             ],
+                                            "chapter":  "",
+                                            "grade":  0
+                                        },
+                        "bending-light":  {
+                                              "name_fa":  "",
+                                              "subject":  "",
+                                              "output_file":  "bending-light_all_adapted-from-phet.html",
+                                              "dependencies":  [
+                                                                   "babel"
+                                                               ],
+                                              "chapter":  "",
+                                              "grade":  0
+                                          },
+                        "area-model-introduction":  {
+                                                        "name_fa":  "",
+                                                        "subject":  "",
+                                                        "output_file":  "area-model-introduction_all_adapted-from-phet.html",
+                                                        "dependencies":  [
+                                                                             "babel"
+                                                                         ],
+                                                        "chapter":  "",
+                                                        "grade":  0
+                                                    },
+                        "circuit-construction-kit-dc-virtual-lab":  {
+                                                                        "name_fa":  "",
+                                                                        "subject":  "",
+                                                                        "output_file":  "circuit-construction-kit-dc-virtual-lab_all_adapted-from-phet.html",
+                                                                        "dependencies":  [
+                                                                                             "babel"
+                                                                                         ],
+                                                                        "chapter":  "",
+                                                                        "grade":  0
+                                                                    },
+                        "geometric-optics":  {
+                                                 "name_fa":  "",
+                                                 "subject":  "",
+                                                 "output_file":  "geometric-optics_all_adapted-from-phet.html",
+                                                 "dependencies":  [
+                                                                      "babel"
+                                                                  ],
+                                                 "chapter":  "",
+                                                 "grade":  0
+                                             },
+                        "number-compare":  {
+                                               "name_fa":  "",
+                                               "subject":  "",
+                                               "output_file":  "number-compare_all_adapted-from-phet.html",
+                                               "dependencies":  [
+                                                                    "babel"
+                                                                ],
+                                               "chapter":  "",
+                                               "grade":  0
+                                           },
+                        "atomic-interactions":  {
+                                                    "name_fa":  "",
+                                                    "subject":  "",
+                                                    "output_file":  "atomic-interactions_all_adapted-from-phet.html",
+                                                    "dependencies":  [
+                                                                         "babel"
+                                                                     ],
+                                                    "chapter":  "",
+                                                    "grade":  0
+                                                },
+                        "wave-on-a-string":  {
+                                                 "name_fa":  "",
+                                                 "subject":  "",
+                                                 "output_file":  "wave-on-a-string_all_adapted-from-phet.html",
+                                                 "dependencies":  [
+                                                                      "babel"
+                                                                  ],
+                                                 "chapter":  "",
+                                                 "grade":  0
+                                             },
+                        "coulombs-law":  {
+                                             "name_fa":  "",
+                                             "subject":  "",
+                                             "output_file":  "coulombs-law_all_adapted-from-phet.html",
+                                             "dependencies":  [
+                                                                  "babel"
+                                                              ],
+                                             "chapter":  "",
+                                             "grade":  0
+                                         },
+                        "keplers-laws":  {
+                                             "name_fa":  "",
+                                             "subject":  "",
+                                             "output_file":  "keplers-laws_all_adapted-from-phet.html",
+                                             "dependencies":  [
+                                                                  "babel"
+                                                              ],
+                                             "chapter":  "",
+                                             "grade":  0
+                                         },
+                        "gene-expression-essentials":  {
+                                                           "name_fa":  "",
+                                                           "subject":  "",
+                                                           "output_file":  "gene-expression-essentials_all_adapted-from-phet.html",
+                                                           "dependencies":  [
+                                                                                "babel"
+                                                                            ],
+                                                           "chapter":  "",
+                                                           "grade":  0
+                                                       },
+                        "area-model-multiplication":  {
+                                                          "name_fa":  "",
+                                                          "subject":  "",
+                                                          "output_file":  "area-model-multiplication_all_adapted-from-phet.html",
+                                                          "dependencies":  [
+                                                                               "babel"
+                                                                           ],
+                                                          "chapter":  "",
+                                                          "grade":  0
+                                                      },
+                        "blackbody-spectrum":  {
+                                                   "name_fa":  "",
+                                                   "subject":  "",
+                                                   "output_file":  "blackbody-spectrum_all_adapted-from-phet.html",
+                                                   "dependencies":  [
+                                                                        "babel"
+                                                                    ],
+                                                   "chapter":  "",
+                                                   "grade":  0
+                                               },
+                        "unit-rates":  {
+                                           "name_fa":  "",
+                                           "subject":  "",
+                                           "output_file":  "unit-rates_all_adapted-from-phet.html",
+                                           "dependencies":  [
+                                                                "babel"
+                                                            ],
+                                           "chapter":  "",
+                                           "grade":  0
+                                       },
+                        "hookes-law":  {
+                                           "name_fa":  "",
+                                           "subject":  "",
+                                           "output_file":  "hookes-law_all_adapted-from-phet.html",
+                                           "dependencies":  [
+                                                                "babel"
+                                                            ],
+                                           "chapter":  "",
+                                           "grade":  0
+                                       },
+                        "neuron":  {
+                                       "name_fa":  "",
+                                       "subject":  "",
+                                       "output_file":  "neuron_all_adapted-from-phet.html",
+                                       "dependencies":  [
+                                                            "babel"
+                                                        ],
+                                       "chapter":  "",
+                                       "grade":  0
+                                   },
+                        "circuit-construction-kit-ac":  {
+                                                            "name_fa":  "",
+                                                            "subject":  "",
+                                                            "output_file":  "circuit-construction-kit-ac_all_adapted-from-phet.html",
+                                                            "dependencies":  [
+                                                                                 "babel"
+                                                                             ],
+                                                            "chapter":  "",
+                                                            "grade":  0
+                                                        },
+                        "resistance-in-a-wire":  {
+                                                     "name_fa":  "",
+                                                     "subject":  "",
+                                                     "output_file":  "resistance-in-a-wire_all_adapted-from-phet.html",
+                                                     "dependencies":  [
+                                                                          "babel"
+                                                                      ],
+                                                     "chapter":  "",
+                                                     "grade":  0
+                                                 },
+                        "number-line-operations":  {
+                                                       "name_fa":  "",
+                                                       "subject":  "",
+                                                       "output_file":  "number-line-operations_all_adapted-from-phet.html",
+                                                       "dependencies":  [
+                                                                            "babel"
+                                                                        ],
+                                                       "chapter":  "",
+                                                       "grade":  0
+                                                   },
+                        "area-model-decimals":  {
+                                                    "name_fa":  "",
+                                                    "subject":  "",
+                                                    "output_file":  "area-model-decimals_all_adapted-from-phet.html",
+                                                    "dependencies":  [
+                                                                         "babel"
+                                                                     ],
+                                                    "chapter":  "",
+                                                    "grade":  0
+                                                },
+                        "john-travoltage":  {
+                                                "name_fa":  "",
+                                                "subject":  "",
+                                                "output_file":  "john-travoltage_all_adapted-from-phet.html",
+                                                "dependencies":  [
+                                                                     "babel"
+                                                                 ],
+                                                "chapter":  "",
+                                                "grade":  0
+                                            },
+                        "masses-and-springs-basics":  {
+                                                          "name_fa":  "",
+                                                          "subject":  "",
+                                                          "output_file":  "masses-and-springs-basics_all_adapted-from-phet.html",
+                                                          "dependencies":  [
+                                                                               "babel"
+                                                                           ],
+                                                          "chapter":  "",
+                                                          "grade":  0
+                                                      },
+                        "energy-skate-park":  {
+                                                  "name_fa":  "",
+                                                  "subject":  "",
+                                                  "output_file":  "energy-skate-park_all_adapted-from-phet.html",
+                                                  "dependencies":  [
+                                                                       "babel"
+                                                                   ],
+                                                  "chapter":  "",
+                                                  "grade":  0
+                                              },
+                        "gravity-force-lab-basics":  {
+                                                         "name_fa":  "",
+                                                         "subject":  "",
+                                                         "output_file":  "gravity-force-lab-basics_all_adapted-from-phet.html",
+                                                         "dependencies":  [
+                                                                              "babel"
+                                                                          ],
+                                                         "chapter":  "",
+                                                         "grade":  0
+                                                     },
+                        "molarity":  {
+                                         "name_fa":  "",
+                                         "subject":  "",
+                                         "output_file":  "molarity_all_adapted-from-phet.html",
+                                         "dependencies":  [
+                                                              "babel"
+                                                          ],
+                                         "chapter":  "",
+                                         "grade":  0
+                                     },
+                        "build-a-nucleus":  {
+                                                "name_fa":  "",
+                                                "subject":  "",
+                                                "output_file":  "build-a-nucleus_all_adapted-from-phet.html",
+                                                "dependencies":  [
+                                                                     "babel"
+                                                                 ],
+                                                "chapter":  "",
+                                                "grade":  0
+                                            },
+                        "gravity-force-lab":  {
+                                                  "name_fa":  "",
+                                                  "subject":  "",
+                                                  "output_file":  "gravity-force-lab_all_adapted-from-phet.html",
+                                                  "dependencies":  [
+                                                                       "babel"
+                                                                   ],
+                                                  "chapter":  "",
+                                                  "grade":  0
+                                              },
+                        "calculus-grapher":  {
+                                                 "name_fa":  "",
+                                                 "subject":  "",
+                                                 "output_file":  "calculus-grapher_all_adapted-from-phet.html",
+                                                 "dependencies":  [
+                                                                      "babel"
+                                                                  ],
+                                                 "chapter":  "",
+                                                 "grade":  0
+                                             },
+                        "curve-fitting":  {
+                                              "name_fa":  "",
+                                              "subject":  "",
+                                              "output_file":  "curve-fitting_all_adapted-from-phet.html",
+                                              "dependencies":  [
+                                                                   "babel"
+                                                               ],
+                                              "chapter":  "",
+                                              "grade":  0
+                                          },
+                        "molecule-shapes":  {
+                                                "name_fa":  "",
+                                                "subject":  "",
+                                                "output_file":  "molecule-shapes_all_adapted-from-phet.html",
+                                                "dependencies":  [
+                                                                     "babel"
+                                                                 ],
+                                                "chapter":  "",
+                                                "grade":  0
+                                            },
+                        "masses-and-springs":  {
+                                                   "name_fa":  "",
+                                                   "subject":  "",
+                                                   "output_file":  "masses-and-springs_all_adapted-from-phet.html",
+                                                   "dependencies":  [
+                                                                        "babel"
+                                                                    ],
+                                                   "chapter":  "",
+                                                   "grade":  0
+                                               },
+                        "fluid-pressure-and-flow":  {
+                                                        "name_fa":  "",
+                                                        "subject":  "",
+                                                        "output_file":  "fluid-pressure-and-flow_all_adapted-from-phet.html",
+                                                        "dependencies":  [
+                                                                             "babel"
+                                                                         ],
+                                                        "chapter":  "",
+                                                        "grade":  0
+                                                    },
+                        "membrane-channels":  {
+                                                  "name_fa":  "",
+                                                  "subject":  "",
+                                                  "output_file":  "membrane-channels_all_adapted-from-phet.html",
+                                                  "dependencies":  [
+                                                                       "babel"
+                                                                   ],
+                                                  "chapter":  "",
+                                                  "grade":  0
+                                              },
+                        "my-solar-system":  {
+                                                "name_fa":  "",
+                                                "subject":  "",
+                                                "output_file":  "my-solar-system_all_adapted-from-phet.html",
+                                                "dependencies":  [
+                                                                     "babel"
+                                                                 ],
+                                                "chapter":  "",
+                                                "grade":  0
+                                            },
+                        "natural-selection":  {
+                                                  "name_fa":  "",
+                                                  "subject":  "",
+                                                  "output_file":  "natural-selection_all_adapted-from-phet.html",
+                                                  "dependencies":  [
+                                                                       "babel"
+                                                                   ],
+                                                  "chapter":  "",
+                                                  "grade":  0
+                                              },
+                        "states-of-matter-basics":  {
+                                                        "name_fa":  "",
+                                                        "subject":  "",
+                                                        "output_file":  "states-of-matter-basics_all_adapted-from-phet.html",
+                                                        "dependencies":  [
+                                                                             "babel"
+                                                                         ],
+                                                        "chapter":  "",
+                                                        "grade":  0
+                                                    },
+                        "energy-forms-and-changes":  {
+                                                         "name_fa":  "",
+                                                         "subject":  "",
+                                                         "output_file":  "energy-forms-and-changes_all_adapted-from-phet.html",
+                                                         "dependencies":  [
+                                                                              "babel"
+                                                                          ],
+                                                         "chapter":  "",
+                                                         "grade":  0
+                                                     },
+                        "trig-tour":  {
+                                          "name_fa":  "",
+                                          "subject":  "",
+                                          "output_file":  "trig-tour_all_adapted-from-phet.html",
+                                          "dependencies":  [
+                                                               "babel"
+                                                           ],
+                                          "chapter":  "",
+                                          "grade":  0
+                                      },
+                        "graphing-quadratics":  {
+                                                    "name_fa":  "",
+                                                    "subject":  "",
+                                                    "output_file":  "graphing-quadratics_all_adapted-from-phet.html",
+                                                    "dependencies":  [
+                                                                         "babel"
+                                                                     ],
+                                                    "chapter":  "",
+                                                    "grade":  0
+                                                },
+                        "faradays-law":  {
+                                             "name_fa":  "",
+                                             "subject":  "",
+                                             "output_file":  "faradays-law_all_adapted-from-phet.html",
+                                             "dependencies":  [
+                                                                  "babel"
+                                                              ],
+                                             "chapter":  "",
+                                             "grade":  0
+                                         }
+                    },
+    "shared_dependencies":  {
+                                "common_repos":  [
+                                                     "chipper",
+                                                     "perennial",
+                                                     "perennial-alias",
+                                                     "sherpa",
+                                                     "brand",
+                                                     "phet-core",
+                                                     "assert",
+                                                     "axon",
+                                                     "tandem",
+                                                     "query-string-machine",
+                                                     "scenery",
+                                                     "scenery-phet",
+                                                     "sun",
+                                                     "joist",
+                                                     "tambo",
+                                                     "kite",
+                                                     "dot",
+                                                     "phetcommon",
+                                                     "utterance-queue"
+                                                 ],
+                                "optional_repos":  {
+                                                       "twixt":  "مورد نیاز برای projectile-motion",
+                                                       "shred":  "مورد نیاز برای build-an-atom",
+                                                       "vegas":  "مورد نیاز برای build-an-atom",
+                                                       "griddle":  "مورد نیاز برای energy-skate-park",
+                                                       "nitroglycerin":  "مورد نیاز برای reactants-products-and-leftovers"
+                                                   }
+                            },
+    "font_injection":  {
+                           "enabled":  true,
+                           "font_family":  "B Nazanin",
+                           "font_file":  "fonts/B-Nazanin.ttf",
+                           "css_template":  "@font-face{font-family:\u0027{family}\u0027;src:url(\u0027{path}\u0027) format(\u0027truetype\u0027);}body,div,span,p,button,input,select,textarea{font-family:\u0027{family}\u0027,Tahoma,sans-serif!important;}"
+                       }
 }
