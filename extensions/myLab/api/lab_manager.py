@@ -1,4 +1,4 @@
-# myLab/api/lab_manager.py - با صفحه کاوشگر داخلی
+# myLab/api/lab_manager.py
 import sys
 import logging
 import tempfile
