@@ -122,7 +122,6 @@ PERSIAN_NAMES = {
     "waves-intro": "مقدمات امواج",
 }
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -130,7 +129,7 @@ def _detect_backend():
     py_ver = sys.version_info[:2]
     if py_ver <= (3, 9):
         try:
-            import cefpython3 # type: ignore
+            import cefpython3  # type: ignore
             return "cef"
         except ImportError:
             pass
@@ -150,62 +149,71 @@ class LabExplorer:
         self._server = None
         self._port = 0
         self._labs = api.list_labs()
+        self._open_callback = None  # اضافه کردن مقداردهی اولیه
 
     def _start_server(self):
         """شروع HTTP سرور برای سرو HTML"""
         import socket
+        import threading
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(('127.0.0.1', 0))
             self._port = s.getsockname()[1]
 
+        explorer = self  # ذخیره reference برای استفاده در Handler
+
         class Handler(SimpleHTTPRequestHandler):
-            def do_GET(self):
+            def do_GET(handler_self):
                 try:
-                    if self.path == '/' or self.path == '/explorer':
-                        self._serve_html()
-                    elif self.path.startswith('/api/labs'):
-                        self._serve_json()
-                    elif self.path.startswith('/open'):
-                        self._handle_open()
+                    if handler_self.path == '/' or handler_self.path == '/explorer':
+                        handler_self._serve_html()
+                    elif handler_self.path.startswith('/api/labs'):
+                        handler_self._serve_json()
+                    elif handler_self.path.startswith('/open'):
+                        handler_self._handle_open()
                     else:
-                        self.send_response(404)
-                        self.end_headers()
-                except Exception:
-                    pass
+                        handler_self.send_response(404)
+                        handler_self.end_headers()
+                except Exception as e:
+                    logger.error(f"Error handling request: {e}")
 
-            def _serve_html(self):
-                self.send_response(200)
-                self.send_header('Content-Type', 'text/html; charset=utf-8')
-                self.end_headers()
-                self.wfile.write(EXPLORER_HTML.encode('utf-8'))
+            def _serve_html(handler_self):
+                handler_self.send_response(200)
+                handler_self.send_header('Content-Type', 'text/html; charset=utf-8')
+                handler_self.end_headers()
+                handler_self.wfile.write(EXPLORER_HTML.encode('utf-8'))
 
-            def _serve_json(self):
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json; charset=utf-8')
-                self.end_headers()
-                self.wfile.write(json.dumps(explorer._labs, ensure_ascii=False).encode('utf-8'))
+            def _serve_json(handler_self):
+                handler_self.send_response(200)
+                handler_self.send_header('Content-Type', 'application/json; charset=utf-8')
+                handler_self.end_headers()
+                handler_self.wfile.write(json.dumps(explorer._labs, ensure_ascii=False).encode('utf-8'))
 
-            def _handle_open(self):
+            def _handle_open(handler_self):
                 from urllib.parse import urlparse, parse_qs
-                params = parse_qs(urlparse(self.path).query)
+                params = parse_qs(urlparse(handler_self.path).query)
                 name = params.get('name', [''])[0]
                 grade = params.get('grade', [''])[0]
                 subject = params.get('subject', [''])[0]
 
-                if name and grade and subject:
+                if name and grade and subject and explorer._open_callback:
                     explorer._open_callback(name, grade, subject)
-                    self.send_response(200)
-                    self.send_header('Content-Type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(b'{"status":"ok"}')
+                    handler_self.send_response(200)
+                    handler_self.send_header('Content-Type', 'application/json')
+                    handler_self.end_headers()
+                    handler_self.wfile.write(b'{"status":"ok"}')
+                else:
+                    handler_self.send_response(400)
+                    handler_self.send_header('Content-Type', 'application/json')
+                    handler_self.end_headers()
+                    handler_self.wfile.write(b'{"status":"error","message":"Missing parameters"}')
 
-            def log_message(self, format, *args):
+            def log_message(handler_self, format, *args):
                 pass
 
-        explorer = self
         self._server = HTTPServer(('127.0.0.1', self._port), Handler)
-        import threading
-        threading.Thread(target=self._server.serve_forever, daemon=True).start()
+        server_thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+        server_thread.start()
 
     def show(self, open_callback):
         """نمایش کاوشگر در WebView"""
@@ -216,9 +224,11 @@ class LabExplorer:
         url = f'http://127.0.0.1:{self._port}/explorer'
 
         if backend == "cef":
-            import cefpython3 as cef # type: ignore
-            try: cef.Initialize()
-            except TypeError: cef.Initialize(settings={"multi_threaded_message_loop": False})
+            import cefpython3 as cef  # type: ignore
+            try:
+                cef.Initialize()
+            except TypeError:
+                cef.Initialize(settings={"multi_threaded_message_loop": False})
             cef.CreateBrowserSync(url=url, window_title="آزمایشگاه مجازی")
             cef.MessageLoop()
             cef.Shutdown()
@@ -232,10 +242,15 @@ class LabExplorer:
             import webbrowser
             webbrowser.open(url)
 
+    def __del__(self):
+        """پاکسازی سرور هنگام حذف شیء"""
+        if self._server:
+            self._server.shutdown()
+            self._server.server_close()
+
 
 # ===== HTML صفحه اصلی =====
 FONT_CSS = get_font_css()
-
 
 EXPLORER_HTML = f'''<!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -243,334 +258,428 @@ EXPLORER_HTML = f'''<!DOCTYPE html>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
 <title>آزمایشگاه مجازی</title>
 <style>
-{FONT_CSS}
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&display=swap');
 
 :root {{
-  --bg: #06060f;
-  --surface: rgba(255,255,255,0.025);
-  --surface-hover: rgba(233,69,96,0.06);
-  --border: rgba(255,255,255,0.05);
-  --text: #e6e6ef;
-  --text-secondary: #7e7e9a;
-  --accent: #e94560;
-  --accent-light: #ff6b81;
-  --accent-glow: rgba(233,69,96,0.2);
-  --math: #5dade2;
-  --phys: #e74c3c;
-  --chem: #2ecc71;
-  --bio: #af7ac5;
-  --radius: 16px;
-  --radius-sm: 10px;
-  --padding: 28px;
-  --transition: 0.3s cubic-bezier(0.25, 0.8, 0.25, 1.2);
+  --board: #223229;
+  --board-dark: #17221b;
+  --chalk: #f4efe1;
+  --chalk-dim: #aab8ac;
+  --chalk-faint: rgba(244,239,225,0.5);
+  --cork: #9c7748;
+  --cork-dark: #7a5c37;
+  --cork-light: #b78c56;
+  --card: #f2ead6;
+  --card-line: rgba(70,90,120,0.16);
+  --ink: #33302a;
+  --ink-dim: #6b6455;
+  --pin-brass: #d9ab5e;
+  --pin-shadow: #6e4a1c;
+  --tape: rgba(230,210,150,0.55);
+  --math: #4f83b0;
+  --phys: #bb5136;
+  --chem: #4f8f63;
+  --bio: #8a5f8c;
+  --radius: 3px;
 }}
 
-* {{ margin:0; padding:0; box-sizing:border-box }}
+* {{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }}
+
+html {{ scroll-behavior: smooth; }}
 
 body {{
-  font-family: 'B Nazanin', Tahoma, sans-serif;
-  background: var(--bg);
-  background-image:
-    radial-gradient(ellipse at 15% 50%, rgba(233,69,96,0.04) 0%, transparent 60%),
-    radial-gradient(ellipse at 85% 30%, rgba(15,52,96,0.06) 0%, transparent 60%),
-    radial-gradient(ellipse at 50% 100%, rgba(46,204,113,0.03) 0%, transparent 50%);
-  color: var(--text);
+  font-family: 'Vazirmatn', Tahoma, sans-serif;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 38px, rgba(255,255,255,0.025) 39px),
+    repeating-linear-gradient(90deg, transparent 0 38px, rgba(255,255,255,0.025) 39px),
+    radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.05), transparent 55%),
+    var(--board);
+  color: var(--chalk);
   min-height: 100vh;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }}
 
-.header {{
-  background: rgba(6,6,15,0.85);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  padding: 32px var(--padding) 28px;
-  text-align: center;
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+/* ---------- hanging sign header ---------- */
+.sign-wrap {{
+  position: relative;
+  padding-top: 34px;
+  display: flex;
+  justify-content: center;
 }}
+.sign-wrap::before,
+.sign-wrap::after {{
+  content:'';
+  position:absolute;
+  top:0;
+  width:1px;
+  height:34px;
+  background: rgba(244,239,225,0.35);
+}}
+.sign-wrap::before {{ left: calc(50% - 90px); }}
+.sign-wrap::after {{ left: calc(50% + 90px); }}
+
+.header {{
+  background: linear-gradient(180deg, var(--cork-light), var(--cork) 40%, var(--cork-dark));
+  border: 1px solid rgba(0,0,0,0.25);
+  border-radius: 6px;
+  padding: 22px 44px 20px;
+  text-align: center;
+  box-shadow: 0 14px 26px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+  position: sticky;
+  top: 14px;
+  z-index: 10;
+  transform: rotate(-0.4deg);
+}}
+.header::before, .header::after {{
+  content:'';
+  position:absolute;
+  top: 9px;
+  width:9px; height:9px;
+  border-radius:50%;
+  background: radial-gradient(circle at 35% 30%, #e6c98a, #8a6a30 70%, #5a4118);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.6);
+}}
+.header::before {{ left: 14px; }}
+.header::after {{ right: 14px; }}
 
 .header h1 {{
-  font-size: clamp(26px, 5vw, 40px);
+  font-size: clamp(24px, 4.6vw, 36px);
   font-weight: 800;
-  background: linear-gradient(135deg, var(--accent), var(--accent-light), #ff8fa3);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 6px;
-  letter-spacing: -0.5px;
+  color: var(--chalk);
+  text-shadow: 0 0 2px rgba(255,255,255,0.35), 0 2px 3px rgba(0,0,0,0.35);
+  letter-spacing: 0.5px;
+  margin-bottom: 5px;
 }}
 
 .header .stats {{
-  font-size: clamp(13px, 2.2vw, 16px);
-  color: var(--text-secondary);
+  font-size: clamp(12px, 2vw, 15px);
+  color: rgba(244,239,225,0.75);
 }}
-
 .header .stats strong {{
-  color: var(--accent-light);
+  color: var(--chalk);
   font-weight: 800;
-  font-size: clamp(18px, 3vw, 24px);
+  font-size: clamp(16px, 2.6vw, 20px);
 }}
 
+/* ---------- filters as chalk tabs ---------- */
 .filters {{
   display: flex;
-  gap: 12px;
+  gap: 22px;
   justify-content: center;
-  padding: 20px var(--padding) 0;
+  padding: 26px 24px 0;
   flex-wrap: wrap;
 }}
 
 .filter-group {{
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
   justify-content: center;
+  border-bottom: 1px dashed rgba(244,239,225,0.2);
+  padding-bottom: 10px;
 }}
 
 .filter-btn {{
-  padding: 9px 18px;
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  color: var(--text-secondary);
-  border-radius: 50px;
+  padding: 7px 14px;
+  border: none;
+  background: transparent;
+  color: var(--chalk-dim);
   cursor: pointer;
-  font-size: clamp(12px, 2vw, 15px);
-  font-weight: 500;
-  transition: all var(--transition);
-  font-family: 'B Nazanin', Tahoma, sans-serif;
+  font-size: clamp(12px, 1.9vw, 14.5px);
+  font-weight: 600;
+  font-family: 'Vazirmatn', Tahoma, sans-serif;
   white-space: nowrap;
-  backdrop-filter: blur(8px);
-  -webkit-tap-highlight-color: transparent;
+  position: relative;
+  border-radius: 3px;
+  transition: color .2s ease, background .2s ease;
 }}
-
-.filter-btn:hover {{
-  background: rgba(255,255,255,0.05);
-  color: var(--text);
-  transform: translateY(-1px);
-  border-color: rgba(255,255,255,0.12);
-}}
-
-.filter-btn:active {{
-  transform: scale(0.96);
-}}
-
+.filter-btn:hover {{ color: var(--chalk); background: rgba(244,239,225,0.06); }}
+.filter-btn:active {{ transform: scale(0.96); }}
 .filter-btn.active {{
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 4px 16px var(--accent-glow);
-  font-weight: 700;
+  color: var(--chalk);
+}}
+.filter-btn.active::after {{
+  content:'';
+  position:absolute;
+  left:12px; right:12px; bottom:-11px;
+  height:2px;
+  background: var(--chalk);
+  box-shadow: 0 0 6px rgba(244,239,225,0.6);
+  border-radius: 2px;
 }}
 
+/* ---------- search: taped index card ---------- */
 .search-box {{
-  text-align: center;
-  padding: 18px var(--padding) 0;
+  display:flex;
+  justify-content:center;
+  padding: 30px 24px 6px;
 }}
-
+.search-inner {{
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  transform: rotate(-0.6deg);
+}}
+.search-inner::before {{
+  content:'';
+  position:absolute;
+  top:-8px; left: 20px;
+  width: 46px; height: 16px;
+  background: var(--tape);
+  border: 1px solid rgba(0,0,0,0.05);
+  transform: rotate(-4deg);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}}
+.search-inner::after {{
+  content:'';
+  position:absolute;
+  top:-8px; right: 20px;
+  width: 46px; height: 16px;
+  background: var(--tape);
+  border: 1px solid rgba(0,0,0,0.05);
+  transform: rotate(3deg);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}}
 .search-box input {{
   width: 100%;
-  max-width: 520px;
-  padding: 14px 26px;
-  border-radius: 50px;
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font-size: clamp(14px, 2.2vw, 17px);
+  padding: 13px 20px;
+  border-radius: 2px;
+  border: none;
+  background: var(--card);
+  background-image: repeating-linear-gradient(to bottom, transparent 0 25px, var(--card-line) 26px);
+  color: var(--ink);
+  font-size: clamp(13px, 2vw, 15.5px);
   outline: none;
-  transition: all 0.3s ease;
-  font-family: 'B Nazanin', Tahoma, sans-serif;
-  backdrop-filter: blur(8px);
+  font-family: 'Vazirmatn', Tahoma, sans-serif;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.3);
 }}
+.search-box input::placeholder {{ color: var(--ink-dim); }}
+.search-box input:focus {{ box-shadow: 0 8px 20px rgba(0,0,0,0.35), 0 0 0 2px var(--pin-brass); }}
 
-.search-box input::placeholder {{ color: #4a4a5e; font-size: clamp(13px, 2vw, 15px); }}
-
-.search-box input:focus {{
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
-  background: rgba(255,255,255,0.04);
-}}
-
+/* ---------- grid of pinned index cards ---------- */
 .labs-grid {{
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
-  gap: 20px;
-  padding: 24px var(--padding) var(--padding);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 34px 22px;
+  padding: 42px 26px 60px;
+  max-width: 1280px;
+  margin: 0 auto;
 }}
 
 .lab-card {{
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--card);
+  background-image: repeating-linear-gradient(to bottom, transparent 0 24px, var(--card-line) 25px);
   border-radius: var(--radius);
-  padding: 24px;
+  padding: 26px 18px 16px;
   cursor: pointer;
-  transition: all var(--transition);
   position: relative;
-  overflow: hidden;
-  backdrop-filter: blur(8px);
-  -webkit-tap-highlight-color: transparent;
-}}
-
-.lab-card::after {{
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,0.06) 0%, transparent 60%);
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  pointer-events: none;
-}}
-
-.lab-card:hover::after {{
-  opacity: 1;
+  color: var(--ink);
+  border-right: 3px solid rgba(187,81,54,0.25);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.5) inset;
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform .3s cubic-bezier(.25,.8,.25,1.25), box-shadow .3s ease;
 }}
 
 .lab-card:hover {{
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(233,69,96,0.15);
-  border-color: rgba(233,69,96,0.25);
-  background: var(--surface-hover);
+  transform: rotate(0deg) translateY(-7px);
+  box-shadow: 0 20px 30px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.5) inset;
+  z-index: 3;
 }}
+.lab-card:active {{ transform: rotate(0deg) translateY(-3px) scale(0.98); }}
 
-.lab-card:active {{
-  transform: scale(0.98);
+.lab-card::before {{
+  content:'';
+  position:absolute;
+  top:-9px; left:50%;
+  transform: translateX(-50%);
+  width:15px; height:15px;
+  border-radius:50%;
+  background: radial-gradient(circle at 34% 30%, #f4dca0, var(--pin-brass) 55%, var(--pin-shadow) 100%);
+  box-shadow: 0 3px 4px rgba(0,0,0,0.5);
+  z-index: 2;
 }}
 
 .lab-card .badge {{
   position: absolute;
-  top: 16px;
-  right: 16px;
-  padding: 6px 14px;
-  border-radius: 50px;
-  font-size: 12px;
-  font-weight: 700;
+  top: -10px;
+  right: 10px;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size: 11px;
+  font-weight: 800;
   color: #fff;
-  letter-spacing: 0.3px;
-  backdrop-filter: blur(4px);
+  text-shadow: 0 1px 1px rgba(0,0,0,0.25);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.3);
+  border: 2px solid rgba(255,255,255,0.15);
 }}
 
-.b-MATH {{ background: var(--math); box-shadow: 0 2px 8px rgba(93,173,226,0.3); }}
-.b-PHYS {{ background: var(--phys); box-shadow: 0 2px 8px rgba(231,76,60,0.3); }}
-.b-CHEM {{ background: var(--chem); box-shadow: 0 2px 8px rgba(46,204,113,0.3); }}
-.b-BIO  {{ background: var(--bio); box-shadow: 0 2px 8px rgba(175,122,197,0.3); }}
+.b-MATH {{ background: radial-gradient(circle at 35% 30%, #7aa9cf, var(--math)); }}
+.b-PHYS {{ background: radial-gradient(circle at 35% 30%, #d97b5e, var(--phys)); }}
+.b-CHEM {{ background: radial-gradient(circle at 35% 30%, #79b98d, var(--chem)); }}
+.b-BIO  {{ background: radial-gradient(circle at 35% 30%, #ac82ad, var(--bio)); }}
 
 .lab-card .grade {{
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  padding: 6px 10px;
-  border-radius: 50px;
-  font-size: 12px;
+  display: inline-block;
+  margin-top: 2px;
+  padding: 2px 9px;
+  border: 1px dashed var(--ink-dim);
+  border-radius: 20px;
+  font-size: 11px;
   font-weight: 600;
-  background: rgba(255,255,255,0.06);
-  color: var(--text-secondary);
+  color: var(--ink-dim);
 }}
 
 .lab-card h3 {{
-  margin-top: 34px;
-  font-size: clamp(15px, 2.5vw, 18px);
+  margin-top: 12px;
+  font-size: clamp(14.5px, 2.3vw, 17px);
   font-weight: 700;
-  color: var(--text);
-  margin-bottom: 8px;
+  color: var(--ink);
+  margin-bottom: 10px;
   line-height: 1.5;
 }}
 
 .lab-card .info {{
-  font-size: clamp(11px, 1.8vw, 13px);
-  color: var(--text-secondary);
+  font-size: clamp(11px, 1.7vw, 12.5px);
+  color: var(--ink-dim);
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }}
 
 .no-results {{
+  grid-column: 1 / -1;
   text-align: center;
-  padding: 80px var(--padding);
-  color: #4a4a5e;
-  font-size: clamp(16px, 3vw, 20px);
-  font-weight: 500;
+  padding: 90px 24px;
+  color: var(--chalk-dim);
+  font-size: clamp(15px, 3vw, 19px);
+  font-weight: 600;
 }}
 
 @media (max-width: 600px) {{
-  .labs-grid {{ grid-template-columns: 1fr; padding: 16px; }}
-  .header {{ padding: 20px 16px; }}
-  .filters {{ padding: 12px 8px; gap: 6px; }}
-  .filter-btn {{ padding: 7px 12px; }}
-  .lab-card {{ padding: 18px; }}
+  .labs-grid {{ grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 30px 14px; padding: 34px 14px 40px; }}
+  .header {{ padding: 18px 26px 16px; }}
+  .filters {{ gap: 14px; padding: 18px 10px 0; }}
 }}
 
 ::-webkit-scrollbar {{ width: 4px; }}
 ::-webkit-scrollbar-track {{ background: transparent; }}
-::-webkit-scrollbar-thumb {{ background: rgba(255,255,255,0.08); border-radius: 2px; }}
-::-webkit-scrollbar-thumb:hover {{ background: rgba(255,255,255,0.15); }}
+::-webkit-scrollbar-thumb {{ background: rgba(244,239,225,0.15); border-radius: 2px; }}
 </style>
 </head>
 <body>
 
-<div class="header">
-<h1>🔬 آزمایشگاه مجازی</h1>
-<div class="stats"><strong id="count">۰</strong> شبیه‌ساز تعاملی - فیزیک · شیمی · ریاضی · زیست</div>
+<div class="sign-wrap">
+  <div class="header">
+    <h1>🔬 آزمایشگاه مجازی</h1>
+    <div class="stats"><strong id="count">۰</strong> شبیه‌ساز تعاملی — فیزیک · شیمی · ریاضی · زیست</div>
+  </div>
 </div>
 
 <div class="filters">
-<div class="filter-group" id="grade-filters"><button class="filter-btn active" onclick="filter('grade','all',this)">📚 همه مقاطع</button></div>
-<div class="filter-group" id="subject-filters"><button class="filter-btn active" onclick="filter('subject','all',this)">📖 همه درس‌ها</button></div>
+<div class="filter-group" id="grade-filters"><button class="filter-btn active" onclick="filter('grade','all',this)">همه مقاطع</button></div>
+<div class="filter-group" id="subject-filters"><button class="filter-btn active" onclick="filter('subject','all',this)">همه درس‌ها</button></div>
 </div>
 
-<div class="search-box"><input type="text" id="search" placeholder="🔍 جستجو به فارسی یا انگلیسی..." oninput="render()"></div>
-<div class="labs-grid" id="grid"><div class="no-results">⏳ در حال بارگذاری...</div></div>
+<div class="search-box"><div class="search-inner"><input type="text" id="search" placeholder="جستجو به فارسی یا انگلیسی…" oninput="render()"></div></div>
+<div class="labs-grid" id="grid"><div class="no-results">در حال بارگذاری…</div></div>
 
 <script>
-const PERSIAN={json.dumps(PERSIAN_NAMES, ensure_ascii=False)};
+const PERSIAN=JSON.parse('{json.dumps(PERSIAN_NAMES, ensure_ascii=False)}');
 const SL={{'MATH':'ریاضی','PHYS':'فیزیک','CHEM':'شیمی','BIO':'زیست'}};
 const GL={{'G7':'هفتم','G8':'هشتم','G9':'نهم','G10':'دهم','G11':'یازدهم','G12':'دوازدهم','ACA':'دانشگاهی'}};
 const GO=['G7','G8','G9','G10','G11','G12','ACA'];
 const SO=['MATH','PHYS','CHEM','BIO'];
-let labs=[],g='all',s='all';
+let labs=[];
+let g='all',s='all';
 
 function pname(n){{return PERSIAN[n]||n.replace(/-/g,' ')}}
 
-async function init(){{
-try{{
-let r=await fetch('/api/labs');labs=await r.json();
-document.getElementById('count').textContent=labs.length;
-let gf=document.getElementById('grade-filters'),sf=document.getElementById('subject-filters');
-GO.forEach(x=>{{let c=labs.filter(l=>l.grade===x).length;if(c){{let b=document.createElement('button');b.className='filter-btn';b.textContent=GL[x]+' ('+c+')';b.onclick=()=>filter('grade',x,b);gf.appendChild(b)}}}});
-SO.forEach(x=>{{let c=labs.filter(l=>l.subject===x).length;if(c){{let b=document.createElement('button');b.className='filter-btn';b.textContent=SL[x]+' ('+c+')';b.onclick=()=>filter('subject',x,b);sf.appendChild(b)}}}});
-render();
-}}catch(e){{document.getElementById('grid').innerHTML='<div class="no-results">⚠️ خطا در بارگذاری</div>'}}
+function tilt(name){{
+  let h=0; for(let i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))>>>0;
+  return ((h%70)/10-3.5).toFixed(2);
+}}
+
+async function loadLabs(){{
+  try{{
+    const res=await fetch('/api/labs');
+    labs=await res.json();
+    document.getElementById('count').textContent=labs.length;
+    initFilters();
+    render();
+  }}catch(e){{
+    console.error('Error loading labs:',e);
+    document.getElementById('grid').innerHTML='<div class="no-results">خطا در بارگذاری شبیه‌سازها</div>';
+  }}
+}}
+
+function initFilters(){{
+  let gf=document.getElementById('grade-filters'),sf=document.getElementById('subject-filters');
+  // پاک کردن فیلترهای قبلی (به جز دکمه "همه")
+  while(gf.children.length>1) gf.removeChild(gf.lastChild);
+  while(sf.children.length>1) sf.removeChild(sf.lastChild);
+
+  GO.forEach(x=>{{
+    let c=labs.filter(l=>l.grade===x).length;
+    if(c){{
+      let b=document.createElement('button');
+      b.className='filter-btn';
+      b.textContent=GL[x]+' ('+c+')';
+      b.onclick=()=>filter('grade',x,b);
+      gf.appendChild(b);
+    }}
+  }});
+  SO.forEach(x=>{{
+    let c=labs.filter(l=>l.subject===x).length;
+    if(c){{
+      let b=document.createElement('button');
+      b.className='filter-btn';
+      b.textContent=SL[x]+' ('+c+')';
+      b.onclick=()=>filter('subject',x,b);
+      sf.appendChild(b);
+    }}
+  }});
 }}
 
 function filter(type,val,btn){{
-if(type==='grade'){{g=val;document.querySelectorAll('#grade-filters .filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active')}}
-else{{s=val;document.querySelectorAll('#subject-filters .filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active')}}
-render()
+  if(type==='grade'){{
+    g=val;
+    document.querySelectorAll('#grade-filters .filter-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  }}else{{
+    s=val;
+    document.querySelectorAll('#subject-filters .filter-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  }}
+  render();
 }}
 
 function render(){{
-let q=document.getElementById('search').value.toLowerCase();
-let f=labs.filter(l=>{{
-  if(g!=='all'&&l.grade!==g) return false;
-  if(s!=='all'&&l.subject!==s) return false;
-  if(!q) return true;
-  let pn=pname(l.name).toLowerCase();
-  let en=l.name.replace(/-/g,' ').toLowerCase();
-  return pn.includes(q) || en.includes(q) || l.name.toLowerCase().includes(q);
-}});
-let grid=document.getElementById('grid');
-if(!f.length){{grid.innerHTML='<div class="no-results">😔 شبیه‌سازی یافت نشد</div>';return}}
-grid.innerHTML=f.map(l=>`<div class="lab-card" onclick="openLab('${{l.name}}','${{l.grade}}','${{l.subject}}')" onmousemove="this.style.setProperty('--mx','${{event.offsetX}}px');this.style.setProperty('--my','${{event.offsetY}}px')">
+  let q=document.getElementById('search').value.toLowerCase();
+  let f=labs.filter(l=>{{
+    if(g!=='all'&&l.grade!==g) return false;
+    if(s!=='all'&&l.subject!==s) return false;
+    if(!q) return true;
+    let pn=pname(l.name).toLowerCase();
+    let en=l.name.replace(/-/g,' ').toLowerCase();
+    return pn.includes(q) || en.includes(q) || l.name.toLowerCase().includes(q);
+  }});
+  let grid=document.getElementById('grid');
+  if(!f.length){{grid.innerHTML='<div class="no-results">شبیه‌سازی یافت نشد</div>';return}}
+  grid.innerHTML=f.map(l=>`<div class="lab-card" style="--tilt:${{tilt(l.name)}}deg" onclick="openLab('${{l.name}}','${{l.grade}}','${{l.subject}}')">
 <span class="badge b-${{l.subject}}">${{SL[l.subject]}}</span>
 <span class="grade">${{GL[l.grade]||l.grade}}</span>
 <h3>${{pname(l.name)}}</h3>
 <div class="info"><span>📖 ${{SL[l.subject]}}</span><span>🎓 ${{GL[l.grade]||l.grade}}</span></div>
-</div>`).join('')
+</div>`).join('');
 }}
 
-function openLab(n,g,s){{fetch('/open?name='+n+'&grade='+g+'&subject='+s)}}
+function openLab(n,g,s){{fetch('/open?name='+encodeURIComponent(n)+'&grade='+encodeURIComponent(g)+'&subject='+encodeURIComponent(s))}}
 
-init();
+// شروع برنامه
+loadLabs();
 </script>
 </body>
 </html>'''
@@ -584,6 +693,7 @@ class LabManager:
             build_dir = Path(__file__).resolve().parent.parent / "build"
         self._api = PhETLabAPI(build_dir)
         self._explorer = LabExplorer(self._api)
+        self._lab_servers = []  # نگهداری رفرنس سرورهای آزمایشگاه
 
     def show_explorer(self):
         """نمایش صفحه کاوشگر آزمایشگاه‌ها"""
@@ -593,32 +703,44 @@ class LabManager:
         """باز کردن یک آزمایشگاه"""
         backend = _detect_backend()
         html = self._api.get_lab(sim_name, grade, subject)
-        if not html: return
+        if not html:
+            logger.error(f"Failed to get lab: {sim_name}")
+            return
 
-        import threading, socket
+        import threading
+        import socket
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(('127.0.0.1', 0))
             port = s.getsockname()[1]
 
         class LabHandler(SimpleHTTPRequestHandler):
-            def do_GET(self):
+            def do_GET(handler_self):
                 try:
-                    self.send_response(200)
-                    self.send_header('Content-Type', 'text/html; charset=utf-8')
-                    self.end_headers()
-                    self.wfile.write(html.encode('utf-8'))
-                except: pass
-            def log_message(self, f, *a): pass
+                    handler_self.send_response(200)
+                    handler_self.send_header('Content-Type', 'text/html; charset=utf-8')
+                    handler_self.end_headers()
+                    handler_self.wfile.write(html.encode('utf-8'))
+                except Exception as e:
+                    logger.error(f"Error serving lab: {e}")
+
+            def log_message(handler_self, f, *a):
+                pass
 
         server = HTTPServer(('127.0.0.1', port), LabHandler)
-        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self._lab_servers.append(server)  # نگهداری رفرنس سرور
+
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
 
         url = f'http://127.0.0.1:{port}/?locale={locale}'
 
         if backend == "cef":
-            import cefpython3 as cef # type: ignore
-            try: cef.Initialize()
-            except TypeError: cef.Initialize(settings={"multi_threaded_message_loop": False})
+            import cefpython3 as cef  # type: ignore
+            try:
+                cef.Initialize()
+            except TypeError:
+                cef.Initialize(settings={"multi_threaded_message_loop": False})
             cef.CreateBrowserSync(url=url, window_title=sim_name)
             cef.MessageLoop()
             cef.Shutdown()
@@ -635,3 +757,12 @@ class LabManager:
     def run(self):
         """اجرای کاوشگر (blocking)"""
         self.show_explorer()
+
+    def __del__(self):
+        """پاکسازی سرورها"""
+        for server in self._lab_servers:
+            try:
+                server.shutdown()
+                server.server_close()
+            except:
+                pass
