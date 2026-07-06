@@ -1,3 +1,5 @@
+# myLab/api/localer.py
+"""تزریق ترجمه نام‌های شبیه‌سازها به HTMLGenerator"""
 
 # ===== نام‌های فارسی شبیه‌سازها =====
 PERSIAN_NAMES = {

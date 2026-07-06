@@ -1,6 +1,10 @@
+# myLab/api/html_generator.py
+"""تزریق HTML به LabManager"""
+
 import json
 from .font_injector import get_font_css
 from .localer import PERSIAN_NAMES
+
 FONT_CSS = get_font_css()
 
 def get_main_html():
