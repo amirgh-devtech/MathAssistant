@@ -4,9 +4,10 @@ import logging
 import json
 import queue  # برای مدیریت تردینگ و انتقال وظایف به مین ترد
 import time
+import base64  # اضافه شد برای انکود کردن لودر جهت جلوگیری از صفحه سفید
 from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-from .html_generator import get_main_html
+from .html_generator import get_loader, get_main_html
 
 _myLab_dir = Path(__file__).resolve().parent.parent
 if str(_myLab_dir) not in sys.path:
@@ -125,7 +126,6 @@ class LabExplorer:
                 cef.Initialize(settings={"multi_threaded_message_loop": False})
             cef.CreateBrowserSync(url=url, window_title="آزمایشگاه مجازی")
 
-            # در CEF اگر قرار است صفی چک شود، باید در لوپ سفارشی چرخید:
             if run_loop_callback:
                 import threading
                 def cef_loop():
@@ -142,8 +142,6 @@ class LabExplorer:
             import webview
             webview.create_window("آزمایشگاه مجازی", url=url, width=1200, height=800)
 
-            # پاس دادن تابع مانیتورینگ صف به متد start بومیِ خود pywebview
-            # این تابع در یک ترد بک‌گراند اجرا می‌شود اما با ساختار پنجره‌ها تداخل ندارد
             if run_loop_callback:
                 webview.start(run_loop_callback)
             else:
@@ -169,8 +167,6 @@ class LabExplorer:
 
 # ===== LabManager =====
 
-# ===== LabManager =====
-
 class LabManager:
     def __init__(self, build_dir=None):
         if build_dir is None:
@@ -188,7 +184,6 @@ class LabManager:
             open_callback=self._queue_open_lab_request,
             run_loop_callback=self._check_ui_queue
         )
-        # به محض اینکه متد بالا (که بلاکینگ است) تمام شود، یعنی کاربر پنجره اصلی را بسته است
         self._is_running = False
 
     def _queue_open_lab_request(self, sim_name, grade, subject, locale="fa"):
@@ -200,7 +195,6 @@ class LabManager:
         import time
         import queue
 
-        # تا زمانی که پنجره اصلی باز است این حلقه می‌چرخد
         while self._is_running:
             try:
                 task = self._ui_queue.get(timeout=0.2)
@@ -221,11 +215,18 @@ class LabManager:
 
         if backend == "webview":
             import webview
-            # ۱. فوراً پنجره را با یک دیتای موقت لودینگ باز می‌کنیم تا کاربر حس کند برنامه سریع است
-            loading_html = "data:text/html;charset=utf-8,<html><body style='background:#1e1e1e;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;'><h2>در حال بارگذاری آزمایشگاه... لطفا شکیبا باشید</h2></body></html>"
-            new_window = webview.create_window(sim_name, url=loading_html, width=1024, height=768)
 
-            # ۲. حالا منطق سنگین (لود اچ‌تی‌ام‌ال و سوکت) را به یک ترد داخلی می‌سپاریم تا UI فریز نشود
+            # دریافت ساختار خام HTML لودر از ماژول خارجی شما
+            raw_loader_html = get_loader()
+
+            # انکود کردن قطعی به Base64 جهت تضمین رندر آنی بدون فریز یا صفحه سفید
+            b64_html = base64.b64encode(raw_loader_html.encode('utf-8')).decode('utf-8')
+            loading_url = f"data:text/html;base64,{b64_html}"
+
+            # ۱. باز کردن آنی پنجره با صفحه لودینگ انکود شده
+            new_window = webview.create_window(sim_name, url=loading_url, width=1024, height=768)
+
+            # ۲. سپردن منطق سنگین به ترد داخلی جهت جلوگیری از مسدود شدن UI اصلی
             import threading
             def bg_load_and_serve():
                 html = self._api.get_lab(sim_name, grade, subject)
@@ -255,15 +256,14 @@ class LabManager:
                 s_thread = threading.Thread(target=server.serve_forever, daemon=True)
                 s_thread.start()
 
-                # ۳. سرور آماده است؛ حالا آدرس پنجره لودینگ را به آدرس واقعی تغییر می‌دهیم
+                # ۳. تغییر آدرس پنجره لودینگ به سرور محلی تازه راه‌اندازی شده
                 final_url = f'http://127.0.0.1:{port}/?locale={locale}'
                 new_window.load_url(final_url)
 
-            # اجرای پروسه ساخت سرور در پس‌زمینه پنجره‌ی تازه متولد شده
             threading.Thread(target=bg_load_and_serve, daemon=True).start()
 
         else:
-            # برای سایر بک‌اندهایی مثل مرورگر عادی یا CEF که ساختار متفاوتی دارند
+            # برای سایر بک‌اندهایی مثل مرورگر عادی یا CEF
             html = self._api.get_lab(sim_name, grade, subject)
             if not html: return
 
@@ -287,7 +287,7 @@ class LabManager:
 
             url = f'http://127.0.0.1:{port}/?locale={locale}'
             if backend == "cef":
-                import cefpython3 as cef # type: ignore
+                import cefpython3 as cef  # type: ignore
                 cef.CreateBrowserSync(url=url, window_title=sim_name)
             else:
                 import webbrowser

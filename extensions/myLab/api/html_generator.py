@@ -439,3 +439,78 @@ loadLabs();
 </script>
 </body>
 </html>'''
+
+def get_loader() -> str:
+    """تولید قالب HTML مدرن و کاربرپسند لودر برای نمایش آنی در اپلیکیشن دسکتاپ"""
+    return """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading...</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #121212 !important; /* پس‌زمینه مشکی عمیق */
+            color: #ffffff;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+        .loader-container {
+            text-align: center;
+            direction: rtl;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        /* طراحی اسپینر چرخنده دایره‌ای مدرن */
+        .spinner {
+            width: 56px;
+            height: 56px;
+            border: 4.5px solid rgba(255, 255, 255, 0.08);
+            border-top: 4.5px solid #3498db; /* رنگ آبی جذاب برای لودر */
+            border-radius: 50%;
+            animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            margin: 0 auto 24px auto;
+            box-shadow: 0 0 15px rgba(52, 152, 219, 0.2);
+        }
+        h2 {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin: 0;
+            color: #e0e0e0;
+            letter-spacing: -0.3px;
+        }
+        p {
+            font-size: 0.9rem;
+            color: #757575;
+            margin: 8px 0 0 0;
+        }
+        /* انیمیشن چرخش */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* انیمیشن ظاهر شدن نرم کل صفحه */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.97); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loader-container">
+        <div class="spinner"></div>
+        <h2>در حال بارگذاری آزمایشگاه...</h2>
+        <p>لطفاً شکیبا باشید، محیط شبیه‌سازی به زودی آماده می‌شود.</p>
+    </div>
+</body>
+</html>
+"""
