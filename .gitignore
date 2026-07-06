@@ -66,6 +66,7 @@ debug*.py
 *.pdf
 *.docx
 *.7z
+*.exe
 
 # === Misc ===
 .direnv/
