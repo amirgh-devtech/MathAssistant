@@ -20,9 +20,9 @@ if str(_myLab_dir) not in sys.path:
 from module.smart_lab_loader import SmartPhETLoader, Grade, Subject, LabInfo
 
 
-class PhETLabAPI:
+class LabAPI:
     """
-    High-level API for accessing PhET lab data.
+    High-level API for accessing lab data.
 
     Provides lab listing, searching, and content loading.
     Used by LabManager and directly by MathAssistant UI.
