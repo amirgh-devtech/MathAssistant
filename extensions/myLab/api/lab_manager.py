@@ -258,7 +258,7 @@ EXPLORER_HTML = f'''<!DOCTYPE html>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
 <title>آزمایشگاه مجازی</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&display=swap');
+{FONT_CSS}
 
 :root {{
   --board: #223229;
