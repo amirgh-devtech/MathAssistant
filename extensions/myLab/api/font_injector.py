@@ -6,7 +6,7 @@ from pathlib import Path
 def get_font_base64() -> str:
     """دریافت base64 فونت Vazirmatn"""
     base_dir = Path(__file__).parent.parent
-    font_path = base_dir / "assets" / "fonts" / "Vazirmatn-Regular.ttf"
+    font_path = base_dir / "assets" / "fonts" / "Vazirmatn-FD-Regular.ttf"
 
     with open(font_path, 'rb') as f:
         return base64.b64encode(f.read()).decode('utf-8')
