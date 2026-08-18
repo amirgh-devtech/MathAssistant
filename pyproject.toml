@@ -1,7 +1,7 @@
 [project]
 name = "mathassistant"
-version = "0.1.0"
-description = "Math Assistant - Educational Math Tools"
+version = "4.0.0"
+description = "Math Assistant - Educational Math Tools By AmirMohammad Ghasemzadeh"
 requires-python = ">=3.12.12"
 dependencies = [
     "ast-serialize>=0.5.0",
