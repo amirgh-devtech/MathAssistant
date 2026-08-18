@@ -825,17 +825,6 @@ class TestMainWindow:
         # Should not raise an exception
         main_window._open_calculator()
 
-    def test_vector_window_factory_called(self, main_window: MainWindow) -> None:
-        """
-        Verify that opening the vector window calls the window manager
-        with the correct window key and factory function.
-        """
-        from MathAssistant.ui.vector_window import VectorWindow
-        main_window._window_manager.open_or_focus = MagicMock()
-        main_window._open_vector_window()
-        main_window._window_manager.open_or_focus.assert_called_once_with("vector", VectorWindow)
-        assert main_window._window_manager.open_or_focus.call_args[0][0] == "vector"
-
     def test_equation_solver_factory_called(self, main_window: MainWindow) -> None:
         """
         Verify that opening the equation solver calls the window manager

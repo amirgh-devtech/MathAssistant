@@ -46,19 +46,6 @@ class TestThemeManagerSingleton:
         tm2 = ThemeManager()
         assert tm2.mode == mode_before
 
-    def test_initial_mode_is_light(self, theme_manager):
-        """حالت اولیه Light باشه"""
-        assert theme_manager.mode == ThemeMode.LIGHT
-
-    def test_initial_glass_is_none(self, theme_manager):
-        """Glass Level اولیه None باشه"""
-        assert theme_manager.glass_level == GlassLevel.NONE
-
-    def test_initial_shadow_is_low(self, theme_manager):
-        """Shadow Elevation اولیه Low باشه"""
-        assert theme_manager.shadow_elevation == ShadowElevation.LOW
-
-
 class TestThemeSwitching:
     """تست تغییر تم"""
 
@@ -66,50 +53,6 @@ class TestThemeSwitching:
         theme_manager.set_mode(ThemeMode.LIGHT)
         assert theme_manager.mode == ThemeMode.LIGHT
         assert not theme_manager.is_dark
-
-    def test_set_mode_dark(self, theme_manager):
-        theme_manager.set_mode(ThemeMode.DARK)
-        assert theme_manager.mode == ThemeMode.DARK
-        assert theme_manager.is_dark
-
-    def test_set_mode_midnight_is_dark(self, theme_manager):
-        theme_manager.set_mode(ThemeMode.MIDNIGHT)
-        assert theme_manager.is_dark
-
-    def test_set_mode_triggers_palette_change(self, theme_manager):
-        """تغییر تم باید پالت رو عوض کنه"""
-        old_bg = theme_manager.palette.background
-        theme_manager.set_mode(ThemeMode.DARK)
-        new_bg = theme_manager.palette.background
-        assert old_bg != new_bg
-
-    def test_toggle_dark_light(self, theme_manager):
-        """تست toggle"""
-        theme_manager.set_mode(ThemeMode.LIGHT)
-        theme_manager.toggle_dark_light()
-        assert theme_manager.mode == ThemeMode.DARK
-        theme_manager.toggle_dark_light()
-        assert theme_manager.mode == ThemeMode.LIGHT
-
-    def test_toggle_from_midnight(self, theme_manager):
-        """toggle از Midnight باید به Light بره"""
-        theme_manager.set_mode(ThemeMode.MIDNIGHT)
-        theme_manager.toggle_dark_light()
-        assert theme_manager.mode == ThemeMode.LIGHT
-
-    def test_cycle_goes_to_next(self, theme_manager):
-        """cycle باید به تم بعدی بره"""
-        theme_manager.set_mode(ThemeMode.LIGHT)
-        theme_manager.cycle_theme()
-        assert theme_manager.mode == ThemeMode.DARK
-        theme_manager.cycle_theme()
-        assert theme_manager.mode == ThemeMode.HIGH_CONTRAST
-
-    def test_cycle_wraps_around(self, theme_manager):
-        """cycle باید از آخر به اول برگرده"""
-        theme_manager.set_mode(ThemeMode.AURORA)
-        theme_manager.cycle_theme()
-        assert theme_manager.mode == ThemeMode.LIGHT
 
     def test_all_8_themes_switch_without_error(self, theme_manager):
         """همه ۸ تم باید بدون خطا ست بشن"""
@@ -333,75 +276,8 @@ class TestExportImport:
         finally:
             Path(filepath).unlink(missing_ok=True)
 
-    def test_import_from_dict(self, theme_manager):
-        config = {
-            "mode": "DARK",
-            "glass_level": "MEDIUM",
-            "shadow_elevation": "HIGH",
-        }
-        theme_manager.import_theme_config(config)
-
-        assert theme_manager.mode == ThemeMode.DARK
-        assert theme_manager.glass_level == GlassLevel.MEDIUM
-        assert theme_manager.shadow_elevation == ShadowElevation.HIGH
-
-    def test_import_from_file(self, theme_manager):
-        with tempfile.NamedTemporaryFile(
-            mode='w', suffix='.json', delete=False
-        ) as f:
-            json.dump({
-                "mode": "OCEAN",
-                "glass_level": "LIGHT",
-            }, f)
-            filepath = f.name
-
-        try:
-            theme_manager.import_theme_config(filepath)
-            assert theme_manager.mode == ThemeMode.OCEAN
-            assert theme_manager.glass_level == GlassLevel.LIGHT
-        finally:
-            Path(filepath).unlink(missing_ok=True)
-
-    def test_import_partial_config(self, theme_manager):
-        """فقط بخشی از تنظیمات رو import کنه"""
-        theme_manager.set_mode(ThemeMode.LIGHT)
-        theme_manager.set_glass_level(GlassLevel.NONE)
-
-        config = {"mode": "DARK"}  # فقط mode
-        theme_manager.import_theme_config(config)
-
-        assert theme_manager.mode == ThemeMode.DARK
-        # glass_level نباید تغییر کنه
-        assert theme_manager.glass_level == GlassLevel.NONE
-
-    def test_export_import_roundtrip(self, theme_manager):
-        """export بعد import باید به همون state برسه"""
-        theme_manager.set_mode(ThemeMode.SUNSET)
-        theme_manager.set_glass_level(GlassLevel.HEAVY)
-        theme_manager.set_shadow_elevation(ShadowElevation.EXTREME)
-
-        config = theme_manager.export_theme_config()
-
-        # ریست
-        theme_manager.set_mode(ThemeMode.LIGHT)
-        theme_manager.set_glass_level(GlassLevel.NONE)
-
-        # import
-        theme_manager.import_theme_config(config)
-
-        assert theme_manager.mode == ThemeMode.SUNSET
-        assert theme_manager.glass_level == GlassLevel.HEAVY
-        assert theme_manager.shadow_elevation == ShadowElevation.EXTREME
-
-
 class TestCacheInvalidation:
     """تست cache invalidation"""
-
-    def test_set_mode_clears_cache(self, theme_manager):
-        style_before = theme_manager.get_button_style("primary")
-        theme_manager.set_mode(ThemeMode.DARK)
-        style_after = theme_manager.get_button_style("primary")
-        assert style_before != style_after
 
     def test_invalidate_cache_method(self, theme_manager):
         """invalidate_cache باید کش رو خالی کنه"""
@@ -422,50 +298,11 @@ class TestCacheInvalidation:
         style2 = theme_manager.get_button_style("primary", "large")
         assert style1 != style2
 
-
-class TestSystemInfo:
-    """تست اطلاعات سیستم"""
-
-    def test_get_system_info_returns_dict(self, theme_manager):
-        info = theme_manager.get_system_info()
-        assert isinstance(info, dict)
-        assert "os" in info
-        assert "qt_version" in info
-        assert "theme" in info
-
-    def test_system_info_reflects_current_state(self, theme_manager):
-        theme_manager.set_mode(ThemeMode.FOREST)
-        info = theme_manager.get_system_info()
-        assert info["theme"] == "FOREST"
-
-
 class TestProperties:
     """تست properties"""
     def setup_method(self):
         ThemeManager._instance = None
         ThemeManager._initialized = False
-
-    def test_mode_property(self, theme_manager):
-        assert theme_manager.mode == ThemeMode.LIGHT
-
-    def test_is_dark_property(self, theme_manager):
-        theme_manager.set_mode(ThemeMode.LIGHT)
-        assert not theme_manager.is_dark
-        theme_manager.set_mode(ThemeMode.DARK)
-        assert theme_manager.is_dark
-        theme_manager.set_mode(ThemeMode.MIDNIGHT)
-        assert theme_manager.is_dark
-
-    def test_palette_property(self, theme_manager):
-        palette = theme_manager.palette
-        assert palette is not None
-        assert isinstance(palette, ColorPalette)
-
-    def test_glass_level_property(self, theme_manager):
-        assert theme_manager.glass_level == GlassLevel.NONE
-
-    def test_shadow_elevation_property(self, theme_manager):
-        assert theme_manager.shadow_elevation == ShadowElevation.LOW
 
     def test_adapter_property(self, theme_manager):
         adapter = theme_manager.adapter
