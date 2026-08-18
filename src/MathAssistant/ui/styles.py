@@ -1297,7 +1297,7 @@ class SystemDetector:
         try:
             if qt_version == QtVersion.PYQT6: import PyQt6; return True
             elif qt_version == QtVersion.PYQT5: import PyQt5; return True
-            elif qt_version == QtVersion.PYSIDE6: import PySide6; return True
+            elif qt_version == QtVersion.PYSIDE6: import PySide6; return True  # type: ignore
         except ImportError: return False
         return False
 
