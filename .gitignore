@@ -21,6 +21,7 @@ out/
 *.py[cod]
 __pycache__/
 *.egg-info/
+LABs/
 
 # === Virtual Environments ===
 .venv/

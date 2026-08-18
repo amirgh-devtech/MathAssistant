@@ -170,7 +170,7 @@ class LabExplorer:
 class LabManager:
     def __init__(self, build_dir=None):
         if build_dir is None:
-            build_dir = Path(__file__).resolve().parent.parent / "build"
+            build_dir = Path(__file__).resolve().parent.parent / "LABs"
         self._api = LabAPI(build_dir)
         self._explorer = LabExplorer(self._api)
         self._lab_servers = []
