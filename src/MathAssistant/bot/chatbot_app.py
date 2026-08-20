@@ -4,9 +4,6 @@ Math Chat Bot - Bridge-Integrated Version
 A PyQt6 desktop application that communicates with a local bridge server,
 which forwards requests to a browser-based API client (e.g., Groq, OpenAI)
 to bypass network restrictions.
-
-This version removes direct Gemini API calls and uses the BridgeClient class
-to send/receive messages via the bridge server.
 """
 
 import sys
