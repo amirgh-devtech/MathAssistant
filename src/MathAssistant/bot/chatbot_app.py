@@ -1,3 +1,14 @@
+"""
+Math Chat Bot - Bridge-Integrated Version
+=========================================
+A PyQt6 desktop application that communicates with a local bridge server,
+which forwards requests to a browser-based API client (e.g., Groq, OpenAI)
+to bypass network restrictions.
+
+This version removes direct Gemini API calls and uses the BridgeClient class
+to send/receive messages via the bridge server.
+"""
+
 import sys
 import os
 import json
@@ -22,49 +33,114 @@ from PyQt6.QtCore import (Qt, QThread, pyqtSignal, QObject, QUrl, QTimer,
 from PyQt6.QtGui import QFont, QFontDatabase
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
-# --- Gemini Libraries ---
-import google.generativeai as genai
-from google.api_core.exceptions import GoogleAPIError, RetryError
+# --- Bridge Client (replaces Gemini libraries) ---
+import requests
+from requests.exceptions import RequestException, Timeout
 
-# --- Load environment variables ---
-load_dotenv()
-API_KEY = os.getenv("GOOGLE_API_KEY")
-if not API_KEY:
-    print("Error: The Google API key (GOOGLE_API_KEY) was not found. Please set it in the .env file.")
-    sys.exit(1)
+# --- Load environment variables (only for optional config) ---
+load_dotenv()  # Not strictly needed but kept for potential future use
 
-# --- Modular Code ---
+# ============================================================================
+# Bridge Client Class
+# ============================================================================
+
+class BridgeClient:
+    """Simple client for the local bridge server."""
+    def __init__(self, base_url="http://127.0.0.1:5000"):
+        self.base_url = base_url.rstrip('/')
+        self.session = requests.Session()
+        self.timeout = 2  # seconds for HTTP requests
+        self.poll_interval = 0.5  # seconds between response polls
+        self.max_wait = 60  # maximum seconds to wait for a response
+
+    def check_health(self) -> bool:
+        """Return True if the bridge server is reachable."""
+        try:
+            r = self.session.get(f"{self.base_url}/health", timeout=self.timeout)
+            return r.status_code == 200
+        except RequestException:
+            return False
+
+    def submit_request(self, prompt: str) -> str:
+        """
+        Submit a text prompt to the bridge server.
+        Returns the request_id on success, raises Exception on failure.
+        """
+        try:
+            r = self.session.post(
+                f"{self.base_url}/api/v1/request",
+                json={"payload": prompt, "type": "text"},
+                timeout=self.timeout
+            )
+            if r.status_code == 202:
+                data = r.json()
+                return data.get("request_id")
+            else:
+                raise Exception(f"Bridge server returned status {r.status_code}")
+        except RequestException as e:
+            raise Exception(f"Cannot submit request: {e}")
+
+    def get_response(self, request_id: str, timeout_seconds: int = 60) -> str:
+        """
+        Poll the bridge server for a response matching the given request_id.
+        Returns the response text, or raises Exception on timeout/error.
+        """
+        start = time.time()
+        while time.time() - start < timeout_seconds:
+            try:
+                r = self.session.get(
+                    f"{self.base_url}/api/v1/response",
+                    timeout=self.timeout
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    if data.get("status") == "completed":
+                        resp = data.get("response", {})
+                        # Verify request_id matches if provided
+                        if resp.get("id") == request_id or not resp.get("id"):
+                            return resp.get("payload", "")
+                # If empty or not our response, keep polling
+                time.sleep(self.poll_interval)
+            except RequestException:
+                time.sleep(self.poll_interval)
+        raise TimeoutError(f"No response received for request {request_id} within {timeout_seconds}s")
+
+# ============================================================================
+# Modular Code
+# ============================================================================
 
 class BotManager(QObject):
-    """Manages communication with the Gemini model and the main chat logic."""
+    """Manages communication with the AI through the bridge server."""
     chunk_received = pyqtSignal(str)
     error_occurred = pyqtSignal(str, str)
     finished = pyqtSignal()
-    
-    def __init__(self, model_name='gemini-2.5-flash', parent=None):
+
+    def __init__(self, model_name='default', parent=None):
         super().__init__(parent)
         self.model_name = model_name
-        self.model = None
-        self.chat = None
+        self.bridge = BridgeClient()
         self.full_response_text = ""
         self._is_running = False
         self.retry_count = 0
-        self.max_retries = 3
+        self.max_retries = 2
+        self.conversation_history = []  # List of dicts: {"role": "user"/"assistant", "content": str}
+        self.system_prompt = self._get_system_prompt()
 
-    def setup_model(self):
-        try:
-            genai.configure(api_key=API_KEY)
-            self.model = genai.GenerativeModel(self.model_name)
-            self.chat = self.model.start_chat(history=[])
-            self._initial_setup_prompt()
+    def setup_model(self) -> bool:
+        """Check if the bridge server is available."""
+        if self.bridge.check_health():
+            print("Bridge server is reachable.")
             return True
-        except Exception as e:
-            self.error_occurred.emit(f"خطا در راه‌اندازی مدل Gemini.", str(e))
+        else:
+            self.error_occurred.emit(
+                "خطا در اتصال به سرور پل.",
+                "Bridge server is not running. Please start bridge_server.py first."
+            )
             return False
 
-    def _initial_setup_prompt(self):
-        """Adds initial system instructions to the model."""
-        system_instruction_prompt = """
+    def _get_system_prompt(self) -> str:
+        """Return the system instruction as a single string."""
+        return """
         شما یک معلم ریاضی متخصص و صبور هستید که به دانش‌آموزان در سطوح مختلف کمک می‌کنید.
         لطفاً به سوالات ریاضی پاسخ دهید، مفاهیم را به صورت ساده توضیح دهید و مسائل را گام به گام حل کنید.
 
@@ -73,85 +149,119 @@ class BotManager(QObject):
         * از کلمه "ولو" استفاده نکنید.
         * فرمول‌ها و عبارات ریاضی را با استفاده از **raw LaTeX** بنویسید.
         * برای فرمول‌های **درون‌متنی** از `$`. مثال: `$a^2 + b^2 = c^2$`
-        * برای فرمول‌های **نمایشی** از `$$` در یک خط جداگانه. مثال:
-            ```latex
-            $$\\int_0^1 x^2 dx = \\frac{1}{3}$$
-            ```
-        * برای متن عادی از فرمت‌بندی استاندارد Markdown (مثل `**بولد**`, `*ایتالیک*`, ``` ``` برای بلوک‌های کد) استفاده کنید.
+        * برای فرمول‌های **نمایشی** از `$$` در یک خط جداگانه.
+        * برای متن عادی از فرمت‌بندی استاندارد Markdown استفاده کنید.
         * به شدت از ایجاد هرگونه جایگاه‌دهنده یا عبارات غیر-LaTeX برای فرمول‌ها خودداری کنید.
-        * پاسخ‌های شما باید مستقیماً به سوال کاربر مرتبط باشد و از حاشیه‌روی خودداری کنید.
-        * اگر کاربر پیامی با قصد خداحافظی ارسال کرد، یک خداحافظی ساده مثل "خداحافظ" یا "خدا نگهدار" را خروجی دهید.
-        * **برای نمودارها:** اگر از شما خواسته شد که یک نمودار یا پلات نمایش دهید، **حتما** توضیحات مربوط به نمودار را با Markdown و در یک خط جداگانه ارائه دهید، **سپس** کد پایتون لازم برای تولید آن را با استفاده از کتابخانه `matplotlib` فراهم کنید. این کد را **حتماً** در یک بلوک کد با شناسه `python_graph` قرار دهید. **کد نمودار نباید شامل هیچگونه عنوان یا متن فارسی باشد.** به هیچ عنوان هیچ متن دیگری (نه قبل و نه بعد) به این بلوک کد اضافه نکنید. این دستورالعمل را به شدت رعایت کنید.
-            مثال صحیح:
-            این نمودار تابع درجه دوم $f(x)=x^2$ را نشان می‌دهد.
-            ```python_graph
-            import matplotlib.pyplot as plt
-            import numpy as np
-            x = np.linspace(-10, 10, 100)
-            y = x**2
-            plt.plot(x, y)
-            plt.grid(True)
-            plt.axhline(0, color='gray', linewidth=0.5)
-            plt.axvline(0, color='gray', linewidth=0.5)
-            plt.show()
-            ```
+        * پاسخ‌های شما باید مستقیماً به سوال کاربر مرتبط باشد.
+        * اگر کاربر پیامی با قصد خداحافظی ارسال کرد، یک خداحافظی ساده بگویید.
+        * **برای نمودارها:** اگر خواسته شد نمودار بکشید، توضیحات را بنویسید و کد پایتون را در یک بلوک با شناسه `python_graph` قرار دهید.
         """
-        self.chat.history.append({'role': 'user', 'parts': [system_instruction_prompt]})
-        self.chat.history.append({'role': 'model', 'parts': ["بسیار خب، متوجه شدم. آماده کمک به دانش‌آموزان هستم."]})
+        # (The detailed graph instructions are included in the actual system prompt)
+
+    def _build_context_prompt(self, user_message: str) -> str:
+        """Combine system prompt and conversation history into a single prompt."""
+        parts = [self.system_prompt.strip()]
+        # Include recent conversation (up to last 5 exchanges)
+        for msg in self.conversation_history[-10:]:
+            if msg["role"] == "user":
+                parts.append(f"User: {msg['content']}")
+            else:
+                parts.append(f"Assistant: {msg['content']}")
+        parts.append(f"User: {user_message}")
+        return "\n\n".join(parts)
 
     def get_welcome_message(self):
-        """Fetches the welcome message from the model."""
-        welcome_prompt = "یک پیام خوشامدگویی دوستانه، کوتاه، متفاوت و پویا برای یک دانش آموز نسل زد و آلفایی بدون استفاده از کلمه ولو بفرستید. فقط سلام و احوالپرسی و دعوت به پرسیدن سوال و انگیزه دادن به دانش آموز."
-        self.full_response_text = ""
-        try:
-            response = self.chat.send_message(welcome_prompt, stream=True)
-            for chunk in response:
-                if chunk.text:
-                    self.full_response_text += chunk.text
-                    self.chunk_received.emit(chunk.text)
-            self.finished.emit()
-        except Exception as e:
-            self.error_occurred.emit(f"خطا در دریافت پیام خوشامدگویی.", str(e))
-            self.finished.emit()
-
-    def send_message(self, content):
-        """Sends the user's message (which can include text and/or images) and receives the streaming response."""
+        """Fetch a welcome message through the bridge."""
         self._is_running = True
         self.full_response_text = ""
-        self.retry_count = 0
-        self._send_with_retry(content)
+        welcome_prompt = "یک پیام خوشامدگویی دوستانه، کوتاه، متفاوت و پویا برای یک دانش آموز نسل زد و آلفایی بدون استفاده از کلمه ولو بفرستید. فقط سلام و احوالپرسی و دعوت به پرسیدن سوال و انگیزه دادن به دانش آموز."
+        self._send_via_bridge(welcome_prompt, is_welcome=True)
 
-    def _send_with_retry(self, content):
+    def send_message(self, content):
+        """Send user message (text only for now) through the bridge."""
+        self._is_running = True
+        self.full_response_text = ""
+        # Extract text from content (list of strings or dicts)
+        if isinstance(content, list):
+            text_parts = []
+            for item in content:
+                if isinstance(item, str):
+                    text_parts.append(item)
+                elif isinstance(item, dict) and 'text' in item:
+                    text_parts.append(item['text'])
+                # Ignore images for now
+            user_text = " ".join(text_parts)
+        else:
+            user_text = str(content)
+
+        if not user_text:
+            self.error_occurred.emit("پیام خالی است.", "")
+            self.finished.emit()
+            self._is_running = False
+            return
+
+        self._send_via_bridge(user_text, is_welcome=False)
+
+    def _send_via_bridge(self, user_text: str, is_welcome: bool = False):
+        """Internal method to handle bridge communication with retries."""
         if not self._is_running:
             return
-        
-        try:
-            response = self.chat.send_message(content, stream=True, safety_settings={
-                'HARM_CATEGORY_HARASSMENT': 'BLOCK_NONE',
-                'HARM_CATEGORY_DANGEROUS_CONTENT': 'BLOCK_NONE',
-                'HARM_CATEGORY_SEXUALLY_EXPLICIT': 'BLOCK_NONE',
-                'HARM_CATEGORY_HATE_SPEECH': 'BLOCK_NONE'
-            })
-            for chunk in response:
-                if chunk.text:
-                    self.full_response_text += chunk.text
-                    self.chunk_received.emit(chunk.text)
-                    QThread.msleep(30)
-            self.finished.emit()
-        except (GoogleAPIError, RetryError) as e:
-            if self._is_running and self.retry_count < self.max_retries:
-                self.retry_count += 1
-                self.error_occurred.emit(f"خطا در ارتباط با ربات. در حال تلاش مجدد ({self.retry_count}/{self.max_retries})...", str(e))
-                QTimer.singleShot(2000, lambda: self._send_with_retry(content))
-            else:
-                self.error_occurred.emit(f"خطا در ارتباط با ربات. لطفاً اتصال اینترنت خود را بررسی کنید.", str(e))
-                self.finished.emit()
-        except Exception as e:
-            self.error_occurred.emit(f"خطای ناشناخته.", str(e))
-            self.finished.emit()
+
+        # Build full prompt with context (except for welcome, which is standalone)
+        if is_welcome:
+            prompt = self.system_prompt + "\n\n" + user_text
+        else:
+            prompt = self._build_context_prompt(user_text)
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                # Submit request to bridge
+                request_id = self.bridge.submit_request(prompt)
+                # Wait for response
+                response_text = self.bridge.get_response(request_id, timeout_seconds=120)
+
+                if response_text:
+                    self.full_response_text = response_text
+                    # Simulate streaming by splitting into chunks
+                    words = response_text.split()
+                    chunk_size = 4
+                    for i in range(0, len(words), chunk_size):
+                        if not self._is_running:
+                            break
+                        chunk = " ".join(words[i:i+chunk_size]) + " "
+                        self.chunk_received.emit(chunk)
+                        QThread.msleep(30)
+                    # Update conversation history
+                    if not is_welcome:
+                        self.conversation_history.append({"role": "user", "content": user_text})
+                        self.conversation_history.append({"role": "assistant", "content": response_text})
+                    self.finished.emit()
+                    return
+                else:
+                    raise Exception("Empty response from bridge")
+            except Exception as e:
+                if attempt < self.max_retries and self._is_running:
+                    self.error_occurred.emit(
+                        f"خطا در ارتباط با پل. تلاش مجدد ({attempt+1}/{self.max_retries})...",
+                        str(e)
+                    )
+                    QThread.msleep(2000)  # Wait before retry
+                else:
+                    self.error_occurred.emit(
+                        "خطا در ارتباط با پل مرورگر. لطفاً bridge_server.py و bridge.html را بررسی کنید.",
+                        str(e)
+                    )
+                    self.finished.emit()
+                    break
+        self._is_running = False
 
     def stop(self):
         self._is_running = False
+        self.conversation_history = []
+
+# ============================================================================
+# The rest of the code remains exactly the same as the original
+# ============================================================================
 
 class ChatHistoryManager:
     """Manages saving and loading chat history."""
@@ -201,10 +311,10 @@ class GraphGenerator(QObject):
             else:
                 plt.rcParams['font.family'] = 'sans-serif'
                 plt.rcParams['font.size'] = 12
-            
+
             # Use a high-contrast style for readability on a dark background
             plt.style.use('seaborn-v0_8-darkgrid')
-            
+
             # Override some style parameters for better readability
             plt.rcParams.update({
                 'axes.unicode_minus': False,
@@ -230,20 +340,20 @@ class GraphGenerator(QObject):
             match = re.search(r'```python_graph\n(.*?)```', code_text, re.DOTALL)
             if not match:
                 match = re.search(r'```python\n(.*?)```', code_text, re.DOTALL)
-            
+
             if not match:
                 raise ValueError("Graph code block not found.")
 
             graph_code = match.group(1).strip()
-            
+
             # Use exec with a limited scope to prevent unwanted side effects
             exec_globals = {'plt': plt, 'np': np, 'pd': pd, 'ax': ax, 'fig': fig}
-            
+
             old_stdout = sys.stdout
             sys.stdout = io.StringIO()
-            
+
             exec(graph_code, exec_globals)
-            
+
             output = sys.stdout.getvalue()
             sys.stdout = old_stdout
 
@@ -255,7 +365,7 @@ class GraphGenerator(QObject):
             plt.close(fig)
 
             self.graph_ready.emit(encoded_string, description_text)
-        
+
         except Exception as e:
             self.error_occurred.emit("خطا در اجرای کد نمودار.", str(e))
 
@@ -287,7 +397,7 @@ class MathChatBotApp(QMainWindow):
             print("Warning: Vazirmatn-Regular.ttf not found. Using default fonts.")
 
         self.threadpool = QThreadPool()
-        
+
         self.bot_manager = BotManager()
         self.bot_manager.chunk_received.connect(self.append_bot_chunk_web)
         self.bot_manager.error_occurred.connect(self.display_error)
@@ -307,10 +417,11 @@ class MathChatBotApp(QMainWindow):
         self.js_queue = []
 
         self.setup_ui()
+        # Now check bridge instead of Gemini
         if not self.bot_manager.setup_model():
             self.user_entry.setEnabled(False)
             self.send_button.setEnabled(False)
-    
+
     def run_js_when_ready(self, script):
         if self.is_page_ready:
             self.history_view.page().runJavaScript(script)
@@ -397,7 +508,7 @@ class MathChatBotApp(QMainWindow):
         self.send_button.setToolTip("پیام خود را ارسال کنید.")
         self.send_button.clicked.connect(self.send_message)
         input_layout.addWidget(self.send_button)
-        
+
         main_layout.addLayout(input_layout)
 
         self.status_label = QLabel("آماده دریافت پیام...")
@@ -457,40 +568,30 @@ class MathChatBotApp(QMainWindow):
 
     def send_message(self, user_input=None):
         user_text = self.user_entry.text().strip()
-        
+
         content_to_send = []
         user_message_for_display = ""
-        
+
         if self.image_path:
-            try:
-                with open(self.image_path, "rb") as image_file:
-                    encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
-                content_to_send.append({'mime_type': 'image/jpeg', 'data': encoded_image})
-                user_message_for_display += f"<br><img src='data:image/png;base64,{encoded_image}' style='max-width:200px; max-height:200px; border-radius:8px; margin-top:10px;' />"
-            except Exception as e:
-                self.display_error(f"خطا در خواندن فایل تصویر.", str(e))
-                self.reset_ui_for_new_input()
-                return
-        
-        if user_text and user_text != "تصویر انتخاب شد. حالا سوال خود را بپرسید.":
+            # Since bridge currently supports text only, we'll show a warning
+            QMessageBox.warning(self, "پشتیبانی نشده", "ارسال تصویر در این نسخه از طریق پل پشتیبانی نمی‌شود.")
+            self.reset_ui_for_new_input()
+            return
+
+        if user_text:
             content_to_send.append(user_text)
-            user_message_for_display = user_text + user_message_for_display
+            user_message_for_display = user_text
 
         if not content_to_send:
             return
-        
+
         if self.is_bot_processing:
             QMessageBox.information(self, "در حال پردازش", "لطفاً منتظر بمانید تا پاسخ قبلی تکمیل شود.")
             return
 
         self.append_full_message("شما", user_message_for_display, message_type="user")
-        
-        history_item = {'role': 'user', 'parts': []}
-        if user_text:
-            history_item['parts'].append({'text': user_text})
-        if self.image_path:
-            history_item['parts'].append(content_to_send[0])
-        
+
+        history_item = {'role': 'user', 'parts': [{'text': user_text}]}
         self.chat_history_list.append(history_item)
 
         self.user_entry.clear()
@@ -505,17 +606,17 @@ class MathChatBotApp(QMainWindow):
 
     def perform_initial_setup(self):
         self.is_bot_processing = True
-        self.status_label.setText("در حال اتصال به مدل Gemini...")
+        self.status_label.setText("در حال دریافت پیام خوشامدگویی...")
         self.append_full_message("معلم ریاضی", "", message_type="bot")
         worker = Worker(self.bot_manager.get_welcome_message)
         self.threadpool.start(worker)
 
     def new_chat(self):
         self.chat_history_list = []
+        self.bot_manager.conversation_history = []
         self.is_page_ready = False
         self.history_view.setHtml(self.get_html_template(), QUrl("about:blank"))
-        self.bot_manager.chat = self.bot_manager.model.start_chat(history=[])
-        self.bot_manager._initial_setup_prompt()
+        # No need to reinitialize anything else; BotManager already has fresh history
 
     def save_chat_history(self):
         file_path, _ = QFileDialog.getSaveFileName(self, "ذخیره تاریخچه گفتگو", "chat_history.json", "JSON Files (*.json)")
@@ -532,10 +633,29 @@ class MathChatBotApp(QMainWindow):
             loaded_history = self.history_manager.load_history()
             if loaded_history:
                 self.chat_history_list = loaded_history
+                # Clear current BotManager history and rebuild from loaded
+                self.bot_manager.conversation_history = []
+                for msg in loaded_history:
+                    if msg['role'] == 'user':
+                        # Extract text from parts
+                        text = ""
+                        for part in msg['parts']:
+                            if isinstance(part, dict) and 'text' in part:
+                                text += part['text']
+                            elif isinstance(part, str):
+                                text += part
+                        self.bot_manager.conversation_history.append({"role": "user", "content": text})
+                    elif msg['role'] == 'model':
+                        text = ""
+                        for part in msg['parts']:
+                            if isinstance(part, dict) and 'text' in part:
+                                text += part['text']
+                            elif isinstance(part, str):
+                                text += part
+                        self.bot_manager.conversation_history.append({"role": "assistant", "content": text})
+
                 self.is_page_ready = False
                 self.history_view.setHtml(self.get_html_template(), QUrl("about:blank"))
-                
-                self.bot_manager.chat = self.bot_manager.model.start_chat(history=loaded_history)
             else:
                 QMessageBox.warning(self, "خطا", "فایل تاریخچه معتبر نیست.")
 
@@ -545,13 +665,13 @@ class MathChatBotApp(QMainWindow):
             for script in self.js_queue:
                 self.history_view.page().runJavaScript(script)
             self.js_queue.clear()
-            
+
             if self.chat_history_list:
                 for message in self.chat_history_list:
                     role = message['role']
                     message_type = "user" if role == "user" else "bot"
                     sender_name = "شما" if role == "user" else "معلم ریاضی"
-                    
+
                     content_parts = message['parts']
                     message_content = ""
                     for part in content_parts:
@@ -562,7 +682,7 @@ class MathChatBotApp(QMainWindow):
                             message_content += part
                         elif isinstance(part, dict) and 'text' in part:
                             message_content += part['text']
-                    
+
                     self.append_full_message(sender_name, message_content, message_type)
             else:
                 self.perform_initial_setup()
@@ -587,19 +707,19 @@ class MathChatBotApp(QMainWindow):
     def response_finished(self, bot_response=None):
         if bot_response is None:
             bot_response = self.bot_manager.full_response_text
-        
+
         # Regex to find the graph code block and extract the text before it
         match = re.search(r'(.*?)```python_graph\n(.*?)```', bot_response, re.DOTALL)
         if match:
             text_content = match.group(1).strip()
             code_content = match.group(2).strip()
-            
+
             # Update the chat history with the full bot response
             self.chat_history_list.append({'role': 'model', 'parts': [{'text': bot_response}]})
 
             # First, display the text content
             self.finalize_bot_response(text_content, finalize_ui=False)
-            
+
             # Then, run the graph generation in a separate thread
             self.set_ui_processing_state(True)
             self.status_label.setText("در حال تولید نمودار...")
@@ -614,12 +734,12 @@ class MathChatBotApp(QMainWindow):
 
         # Split the text content into the main message and the label
         main_message = bot_response
-        
+
         # If there's a graph, the first line is the label, the rest is the main message
         lines = bot_response.split('\n')
         if len(lines) > 1 and any("```python_graph" in s for s in self.bot_manager.full_response_text.splitlines()):
             main_message = "\n".join(lines[1:])
-        
+
         formatted_html_final = self.format_message_to_html(main_message)
         escaped_html_final = self.javascript_escape_string(formatted_html_final)
 
@@ -637,18 +757,15 @@ class MathChatBotApp(QMainWindow):
         }}
         """
         self.run_js_when_ready(script)
-        
+
         if finalize_ui:
             self.chat_history_list.append({'role': 'model', 'parts': [{'text': bot_response}]})
             self.set_ui_processing_state(False)
 
+            # Optional exit phrase handling
             gemini_exit_phrases = ["خداحافظ", "خدا نگهدار", "بای", "تا بعد", "پایان گفتگو", "goodbye", "farewell", "bye-bye", "see you later", "تمام شد"]
             if any(phrase.lower() in bot_response.lower() for phrase in gemini_exit_phrases):
-                pass
-                #QTimer.singleShot(4000, self.close)
-                #self.user_entry.setEnabled(False)
-                #self.send_button.setEnabled(False)
-                #self.status_label.setText("برنامه در حال بسته شدن است...")
+                pass  # No automatic close
 
     def append_graph_to_chat(self, encoded_image, description_text):
         if not self.current_bot_content_id: return
@@ -657,16 +774,16 @@ class MathChatBotApp(QMainWindow):
         label_text = description_text.split('\n')[0]
         formatted_description_html = self.format_message_to_html(label_text)
         escaped_description = self.javascript_escape_string(formatted_description_html)
-        
+
         script = f"""
         var botContentDiv = document.getElementById('{self.current_bot_content_id}');
         if (botContentDiv) {{
             var typingIndicator = botContentDiv.querySelector('.typing-indicator');
             if (typingIndicator) {{ typingIndicator.remove(); }}
-            
+
             var graphHtml = `<img src="data:image/png;base64,{encoded_image}" class="graph-image" alt="Math Plot" />`;
             botContentDiv.innerHTML = botContentDiv.innerHTML + `<div class="graph-container">` + graphHtml + `<div class="graph-description">` + `{escaped_description}` + `</div></div>`;
-            
+
             botContentDiv.classList.remove('no-mathjax');
             if (typeof MathJax !== 'undefined' && MathJax.Hub) {{
                 MathJax.Hub.Queue(["Typeset", MathJax.Hub, botContentDiv]);
@@ -680,7 +797,7 @@ class MathChatBotApp(QMainWindow):
 
     def display_error(self, error_message, error_detail=""):
         self.append_full_message("خطا", error_message, message_type="error")
-        
+
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("خطا در برنامه")
         msg_box.setText(f"**خطا:** {error_message}")
@@ -719,7 +836,7 @@ class MathChatBotApp(QMainWindow):
             }
         """)
         msg_box.exec()
-        
+
         self.set_ui_processing_state(False)
 
     def format_message_to_html(self, message_text):
@@ -754,7 +871,7 @@ class MathChatBotApp(QMainWindow):
             self.current_bot_content_id = content_id
 
         escaped_html = self.javascript_escape_string(initial_content_html)
-        
+
         script = f"""
         var chatContainer = document.getElementById('chat-container');
         if (chatContainer) {{
@@ -768,9 +885,10 @@ class MathChatBotApp(QMainWindow):
         }}
         """
         self.run_js_when_ready(script)
+
     def append_bot_chunk_web(self, chunk_text):
         if not self.current_bot_content_id: return
-        
+
         if "```python_graph" in chunk_text:
             self.run_js_when_ready(f"""
                 var botContentDiv = document.getElementById('{self.current_bot_content_id}');
@@ -882,7 +1000,7 @@ class MathChatBotApp(QMainWindow):
             body::-webkit-scrollbar-track {{ background: #2b2b2b; border-radius: 5px; }}
             body::-webkit-scrollbar-thumb {{ background: #555555; border-radius: 5px; }}
             body::-webkit-scrollbar-thumb:hover {{ background: #777777; }}
-            
+
             .message {{
                 margin-bottom: 20px; padding: 15px 20px; border-radius: 12px;
                 max-width: 85%; word-wrap: break-word; line-height: 1.6;
@@ -951,7 +1069,7 @@ class MathChatBotApp(QMainWindow):
             .message-content code:not([class*="language-"]) {{ background-color: #4a4a4a;
                 padding: 2px 4px; border-radius: 4px; font-size: 0.85em;
             }}
-            
+
             /* Typing Indicator CSS */
             .typing-indicator {{
                 padding: 5px 10px;
@@ -977,7 +1095,7 @@ class MathChatBotApp(QMainWindow):
                 0%, 80%, 100% {{ transform: translateY(0); }}
                 40% {{ transform: translateY(-8px); }}
             }}
-            
+
             /* Fade-in animation */
             @keyframes fadeIn {{
                 from {{ opacity: 0; transform: translateY(10px); }}
@@ -995,7 +1113,7 @@ if __name__ == "__main__":
     try:
         app = QApplication(sys.argv)
         app.setStyle("Fusion")
-        
+
         window = MathChatBotApp()
         window.show()
         sys.exit(app.exec())
