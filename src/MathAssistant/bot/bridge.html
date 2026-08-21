@@ -1,24 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌉 AI Bridge Client</title>
+    <title>🌉 AI Bridge Client - نسخه پیشرفته</title>
     <style>
         :root {
             --bg: #1e1e2e;
             --surface: #2a2a3c;
+            --surface-light: #353548;
             --text: #e0e0e0;
+            --text-muted: #a0a0a0;
             --accent: #008B8B;
             --accent-hover: #006b6b;
             --error: #c0392b;
+            --error-bg: rgba(192, 57, 43, 0.2);
             --success: #27ae60;
+            --success-bg: rgba(39, 174, 96, 0.2);
+            --warning: #f39c12;
+            --warning-bg: rgba(243, 156, 18, 0.2);
+            --border: #444;
+            --shadow: 0 10px 30px rgba(0,0,0,0.5);
+            --radius: 12px;
+            --transition: 0.3s;
         }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: var(--bg);
@@ -28,158 +40,476 @@
             align-items: center;
             min-height: 100vh;
             padding: 20px;
+            line-height: 1.6;
         }
+
         .container {
             background: var(--surface);
-            border-radius: 16px;
+            border-radius: var(--radius);
             padding: 30px;
-            max-width: 600px;
+            max-width: 800px;
             width: 100%;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-shadow: var(--shadow);
+            animation: slideIn 0.5s ease-out;
         }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         h1 {
             text-align: center;
             margin-bottom: 10px;
-            font-size: 1.8rem;
+            font-size: 2rem;
             color: var(--accent);
+            animation: pulse 2s infinite;
         }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .subtitle {
+            text-align: center;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+
         .status-indicator {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
             margin: 20px 0;
-            padding: 12px;
+            padding: 15px;
             background: rgba(0,0,0,0.2);
-            border-radius: 8px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
         }
+
         .dot {
-            width: 12px;
-            height: 12px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
-            background: #f39c12;
-            transition: background 0.3s;
+            background: var(--warning);
+            transition: background var(--transition);
+            animation: blink 1.5s infinite;
         }
+
         .dot.active {
             background: var(--success);
             animation: pulse 2s infinite;
         }
+
         .dot.error {
             background: var(--error);
+            animation: none;
         }
-        @keyframes pulse {
-            0% { opacity: 1; }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
             50% { opacity: 0.3; }
-            100% { opacity: 1; }
         }
+
         .config-section {
             background: rgba(255,255,255,0.05);
-            border-radius: 8px;
-            padding: 15px;
+            border-radius: var(--radius);
+            padding: 20px;
             margin: 15px 0;
+            border: 1px solid var(--border);
         }
+
+        .config-section h3 {
+            margin-bottom: 15px;
+            color: var(--accent);
+            font-size: 1.1rem;
+        }
+
         .config-section label {
             display: block;
             margin-bottom: 5px;
             font-weight: 600;
+            color: var(--text-muted);
         }
-        select, input[type="password"], input[type="text"] {
+
+        select, input[type="password"], input[type="text"], input[type="file"] {
             width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #444;
-            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
             background: #333;
             color: var(--text);
-            font-size: 0.9rem;
+            font-size: 0.95rem;
+            transition: border-color var(--transition);
         }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        select option {
+            background: #333;
+            color: var(--text);
+        }
+
+        .env-status {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 0.9rem;
+            text-align: center;
+            display: none;
+        }
+
+        .env-status.success {
+            display: block;
+            background: var(--success-bg);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+
+        .env-status.error {
+            display: block;
+            background: var(--error-bg);
+            color: var(--error);
+            border: 1px solid var(--error);
+        }
+
         .log {
             background: rgba(0,0,0,0.3);
-            border-radius: 8px;
-            padding: 12px;
-            height: 200px;
+            border-radius: var(--radius);
+            padding: 15px;
+            height: 300px;
             overflow-y: auto;
             margin: 15px 0;
             font-size: 0.85rem;
-            line-height: 1.4;
+            line-height: 1.5;
             font-family: 'Consolas', 'Monaco', monospace;
+            border: 1px solid var(--border);
         }
+
         .log div {
-            margin-bottom: 4px;
+            margin-bottom: 6px;
             border-bottom: 1px solid rgba(255,255,255,0.05);
-            padding-bottom: 4px;
+            padding-bottom: 6px;
+            animation: fadeIn 0.3s ease-out;
         }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
         .log .timestamp {
             color: #888;
             margin-right: 10px;
         }
+
         .log .success { color: var(--success); }
         .log .error { color: var(--error); }
+        .log .warning { color: var(--warning); }
+        .log .info { color: #3498db; }
+
         .buttons {
             display: flex;
             gap: 10px;
             justify-content: center;
+            flex-wrap: wrap;
+            margin: 20px 0;
         }
+
         button {
-            padding: 10px 20px;
+            padding: 12px 24px;
             border: none;
             border-radius: 8px;
             background: var(--accent);
             color: white;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
-            font-size: 0.9rem;
+            transition: all var(--transition);
+            font-size: 0.95rem;
+            font-family: inherit;
+            position: relative;
+            overflow: hidden;
         }
+
         button:hover {
             background: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 139, 139, 0.3);
         }
+
+        button:active {
+            transform: translateY(0);
+        }
+
         button:disabled {
             background: #555;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
+
+        button::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        button:active::after {
+            width: 300px;
+            height: 300px;
+        }
+
         .note {
             font-size: 0.8rem;
-            color: #aaa;
+            color: var(--text-muted);
             text-align: center;
             margin-top: 15px;
+            padding: 10px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+
+        .advanced-settings {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            display: none;
+        }
+
+        .advanced-settings.visible {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .toggle-advanced {
+            background: none;
+            border: none;
+            color: var(--accent);
+            cursor: pointer;
+            text-decoration: underline;
+            padding: 5px;
+            font-size: 0.9rem;
+        }
+
+        .toggle-advanced:hover {
+            background: none;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #444;
+            border-radius: 2px;
+            margin: 10px 0;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar.active {
+            display: block;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.3s;
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% { width: 0%; }
+            50% { width: 70%; }
+            100% { width: 100%; }
+        }
+
+        .model-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+
+        .model-badge {
+            background: var(--accent);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🌉 Bridge Client</h1>
-        <p style="text-align:center; margin-bottom:10px;">Connect to local server and forward requests to AI</p>
+        <p class="subtitle">نسخه پیشرفته با پشتیبانی از Multimodal و Streaming</p>
 
         <div class="status-indicator">
             <span class="dot" id="statusDot"></span>
-            <span id="statusText">Initializing...</span>
+            <span id="statusText">در حال آماده‌سازی...</span>
         </div>
 
         <div class="config-section">
-            <label for="service">AI Service:</label>
+            <h3>📁 پیکربندی API</h3>
+
+            <label>📄 فایل .env:</label>
+            <input type="file" id="envFile" accept=".env" />
+            <div id="envStatus" class="env-status"></div>
+
+            <label for="service">🤖 سرویس هوش مصنوعی:</label>
             <select id="service">
                 <option value="groq">Groq</option>
                 <option value="openai">OpenAI</option>
                 <option value="gemini">Gemini</option>
+                <option value="custom">Custom API</option>
             </select>
 
-            <label for="apiKey">API Key:</label>
-            <input type="password" id="apiKey" placeholder="Enter your API key" autocomplete="off">
+            <label for="apiKey">🔑 کلید API:</label>
+            <input type="password" id="apiKey" placeholder="کلید API از فایل .env بارگذاری می‌شود" autocomplete="off" readonly>
 
-            <label for="model">Model (optional):</label>
-            <input type="text" id="model" placeholder="Default for selected service">
+            <label for="model">📦 مدل:</label>
+            <input type="text" id="model" placeholder="مدل از فایل .env بارگذاری می‌شود" readonly>
+
+            <div class="model-info" id="modelInfo" style="display: none;">
+                <span class="model-badge">Active</span>
+                <span id="modelDetails"></span>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h3>⚙️ تنظیمات پیشرفته</h3>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="autoStart" checked>
+                <label for="autoStart">شروع خودکار پس از بارگذاری .env</label>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="streamMode">
+                <label for="streamMode">استفاده از حالت Streaming</label>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="debugMode">
+                <label for="debugMode">حالت Debug (ثبت جزئیات بیشتر)</label>
+            </div>
+
+            <button class="toggle-advanced" id="toggleAdvanced">نمایش تنظیمات بیشتر ▼</button>
+
+            <div class="advanced-settings" id="advancedSettings">
+                <label for="temperature">🌡️ Temperature:</label>
+                <input type="text" id="temperature" value="0.7" placeholder="0.0 تا 1.0">
+
+                <label for="maxTokens">📏 حداکثر توکن:</label>
+                <input type="text" id="maxTokens" value="4096" placeholder="حداکثر تعداد توکن">
+
+                <label for="timeout">⏱️ زمان انتظار (ثانیه):</label>
+                <input type="text" id="timeout" value="30" placeholder="زمان انتظار برای پاسخ">
+            </div>
+        </div>
+
+        <div class="stats-grid" id="statsGrid" style="display: none;">
+            <div class="stat-card">
+                <div class="stat-value" id="totalRequests">0</div>
+                <div class="stat-label">درخواست‌ها</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="successRate">0%</div>
+                <div class="stat-label">نرخ موفقیت</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avgResponseTime">0ms</div>
+                <div class="stat-label">میانگین زمان پاسخ</div>
+            </div>
         </div>
 
         <div class="buttons">
-            <button id="startBtn">Start Polling</button>
-            <button id="stopBtn" disabled>Stop</button>
+            <button id="startBtn">▶️ شروع Polling</button>
+            <button id="stopBtn" disabled>⏹️ توقف</button>
+            <button id="clearLogBtn">🗑️ پاک کردن لاگ</button>
+            <button id="testBtn">🧪 تست اتصال</button>
+        </div>
+
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill"></div>
         </div>
 
         <div class="log" id="logContainer"></div>
 
         <div class="note">
-            Ensure the Flask bridge server is running on <code>http://127.0.0.1:5000</code>.
+            🔒 کلیدهای API به صورت محلی خوانده می‌شوند و هرگز به سرور ارسال نمی‌شوند.<br>
+            📄 فایل .env خود را برای پیکربندی خودکار بارگذاری کنید.
         </div>
     </div>
 
@@ -187,25 +517,30 @@
         (function() {
             // ==================== CONFIGURATION ====================
             const BRIDGE_SERVER = 'http://127.0.0.1:5000';
+            const POLL_INTERVAL = 1000; // ms
+            const MAX_RETRIES = 3;
+            const RETRY_DELAY = 2000; // ms
 
-            // Default API keys (optional - can be entered in UI)
-            const DEFAULT_KEYS = {
-                groq: '',
-                openai: '',
-                gemini: ''
-            };
-
-            // Default models (override in UI if needed)
+            // Default models
             const DEFAULT_MODELS = {
-                groq: 'mixtral-8x7b-32768',
-                openai: 'gpt-3.5-turbo',
-                gemini: 'gemini-1.5-flash'
+                groq: 'llama-3.2-90b-vision-preview',
+                openai: 'gpt-4o',
+                gemini: 'gemini-1.5-flash',
+                custom: 'custom-model'
             };
 
             // ==================== STATE ====================
             let isPolling = false;
             let pollTimeout = null;
             let processing = false;
+            let envConfig = {};
+            let statistics = {
+                totalRequests: 0,
+                successfulRequests: 0,
+                failedRequests: 0,
+                totalResponseTime: 0,
+                retryCount: 0
+            };
 
             // DOM Elements
             const statusDot = document.getElementById('statusDot');
@@ -213,31 +548,236 @@
             const serviceSelect = document.getElementById('service');
             const apiKeyInput = document.getElementById('apiKey');
             const modelInput = document.getElementById('model');
+            const envFileInput = document.getElementById('envFile');
+            const envStatus = document.getElementById('envStatus');
             const startBtn = document.getElementById('startBtn');
             const stopBtn = document.getElementById('stopBtn');
+            const clearLogBtn = document.getElementById('clearLogBtn');
+            const testBtn = document.getElementById('testBtn');
             const logContainer = document.getElementById('logContainer');
+            const progressBar = document.getElementById('progressBar');
+            const statsGrid = document.getElementById('statsGrid');
+            const modelInfo = document.getElementById('modelInfo');
+            const modelDetails = document.getElementById('modelDetails');
+            const autoStart = document.getElementById('autoStart');
+            const streamMode = document.getElementById('streamMode');
+            const debugMode = document.getElementById('debugMode');
+            const temperature = document.getElementById('temperature');
+            const maxTokens = document.getElementById('maxTokens');
+            const timeout = document.getElementById('timeout');
+            const toggleAdvanced = document.getElementById('toggleAdvanced');
+            const advancedSettings = document.getElementById('advancedSettings');
+
+            // ==================== ENV FILE PARSING ====================
+            function parseEnvFile(content) {
+                const config = {};
+                const lines = content.split('\n');
+
+                for (let line of lines) {
+                    line = line.trim();
+                    // Skip comments and empty lines
+                    if (!line || line.startsWith('#')) continue;
+
+                    // Handle export statements
+                    if (line.startsWith('export ')) {
+                        line = line.substring(7);
+                    }
+
+                    const equalIndex = line.indexOf('=');
+                    if (equalIndex === -1) continue;
+
+                    const key = line.substring(0, equalIndex).trim();
+                    let value = line.substring(equalIndex + 1).trim();
+
+                    // Remove quotes if present
+                    if ((value.startsWith('"') && value.endsWith('"')) ||
+                        (value.startsWith("'") && value.endsWith("'"))) {
+                        value = value.substring(1, value.length - 1);
+                    }
+
+                    // Remove inline comments
+                    const commentIndex = value.indexOf(' #');
+                    if (commentIndex !== -1) {
+                        value = value.substring(0, commentIndex).trim();
+                    }
+
+                    config[key] = value;
+                }
+
+                return config;
+            }
+
+            function applyEnvConfig(config) {
+                envConfig = config;
+
+                // Apply default service
+                if (config.DEFAULT_SERVICE) {
+                    const service = config.DEFAULT_SERVICE.toLowerCase();
+                    if (['groq', 'openai', 'gemini', 'custom'].includes(service)) {
+                        serviceSelect.value = service;
+                    }
+                }
+
+                // Apply settings
+                updateServiceConfig();
+
+                // Apply advanced settings
+                if (config.DEFAULT_TEMPERATURE) {
+                    temperature.value = config.DEFAULT_TEMPERATURE;
+                }
+                if (config.DEFAULT_MAX_TOKENS) {
+                    maxTokens.value = config.DEFAULT_MAX_TOKENS;
+                }
+                if (config.DEFAULT_TIMEOUT) {
+                    timeout.value = config.DEFAULT_TIMEOUT;
+                }
+
+                // Show success message
+                envStatus.style.display = 'block';
+                envStatus.className = 'env-status success';
+                envStatus.textContent = '✅ فایل .env با موفقیت بارگذاری شد!';
+
+                addLog('📁 پیکربندی از فایل .env بارگذاری شد', 'success');
+                updateModelInfo();
+            }
+
+            function updateServiceConfig() {
+                const service = serviceSelect.value;
+                const apiKeyKey = `${service.toUpperCase()}_API_KEY`;
+                const modelKey = `${service.toUpperCase()}_MODEL`;
+
+                // Set API key
+                if (envConfig[apiKeyKey]) {
+                    apiKeyInput.value = envConfig[apiKeyKey];
+                    apiKeyInput.placeholder = 'بارگذاری شده از .env';
+                } else {
+                    apiKeyInput.value = '';
+                    apiKeyInput.placeholder = `کلید ${apiKeyKey} در .env یافت نشد`;
+                }
+
+                // Set model
+                if (envConfig[modelKey]) {
+                    modelInput.value = envConfig[modelKey];
+                } else {
+                    modelInput.value = DEFAULT_MODELS[service] || '';
+                    modelInput.placeholder = 'استفاده از مدل پیش‌فرض';
+                }
+
+                updateModelInfo();
+            }
+
+            function updateModelInfo() {
+                const service = serviceSelect.value;
+                const model = modelInput.value.trim();
+
+                if (model) {
+                    modelInfo.style.display = 'flex';
+                    modelDetails.textContent = `${service.toUpperCase()} - ${model}`;
+                } else {
+                    modelInfo.style.display = 'none';
+                }
+            }
+
+            // Handle .env file loading
+            envFileInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const content = e.target.result;
+                        const config = parseEnvFile(content);
+                        applyEnvConfig(config);
+
+                        // Auto-start if enabled
+                        if (autoStart.checked && !isPolling) {
+                            startPolling();
+                        }
+                    } catch (err) {
+                        envStatus.style.display = 'block';
+                        envStatus.className = 'env-status error';
+                        envStatus.textContent = `❌ خطا در پردازش فایل .env: ${err.message}`;
+                        addLog(`❌ خطا در پردازش .env: ${err.message}`, 'error');
+                    }
+                };
+                reader.onerror = () => {
+                    envStatus.style.display = 'block';
+                    envStatus.className = 'env-status error';
+                    envStatus.textContent = '❌ خطا در خواندن فایل .env';
+                    addLog('❌ خطا در خواندن فایل .env', 'error');
+                };
+                reader.readAsText(file);
+            });
+
+            // Update fields when service changes
+            serviceSelect.addEventListener('change', updateServiceConfig);
+
+            // Toggle advanced settings
+            toggleAdvanced.addEventListener('click', () => {
+                advancedSettings.classList.toggle('visible');
+                toggleAdvanced.textContent = advancedSettings.classList.contains('visible')
+                    ? 'پنهان کردن تنظیمات بیشتر ▲'
+                    : 'نمایش تنظیمات بیشتر ▼';
+            });
 
             // ==================== LOGGING ====================
             function addLog(message, type = 'info') {
-                const timestamp = new Date().toLocaleTimeString();
+                const timestamp = new Date().toLocaleTimeString('fa-IR');
                 const div = document.createElement('div');
                 div.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+
                 if (type === 'success') div.classList.add('success');
                 if (type === 'error') div.classList.add('error');
+                if (type === 'warning') div.classList.add('warning');
+                if (type === 'info') div.classList.add('info');
+
                 logContainer.appendChild(div);
                 logContainer.scrollTop = logContainer.scrollHeight;
+
+                // Debug logging
+                if (debugMode.checked && type !== 'info') {
+                    console.log(`[Bridge Client] ${type}: ${message}`);
+                }
+            }
+
+            function clearLog() {
+                logContainer.innerHTML = '';
+                addLog('🔄 لاگ پاک شد');
             }
 
             // ==================== STATUS ====================
             function setStatus(text, state = 'idle') {
                 statusText.textContent = text;
                 statusDot.className = 'dot';
+
                 if (state === 'active') statusDot.classList.add('active');
                 if (state === 'error') statusDot.classList.add('error');
             }
 
+            function showProgress(show = true) {
+                progressBar.classList.toggle('active', show);
+            }
+
+            function updateStats() {
+                const total = statistics.totalRequests;
+                const success = statistics.successfulRequests;
+                const successRate = total > 0 ? (success / total * 100).toFixed(1) : 0;
+                const avgResponseTime = total > 0
+                    ? (statistics.totalResponseTime / total).toFixed(0)
+                    : 0;
+
+                document.getElementById('totalRequests').textContent = total;
+                document.getElementById('successRate').textContent = `${successRate}%`;
+                document.getElementById('avgResponseTime').textContent = `${avgResponseTime}ms`;
+
+                if (total > 0) {
+                    statsGrid.style.display = 'grid';
+                }
+            }
+
             // ==================== API FUNCTIONS ====================
-            async function sendToGroq(prompt, apiKey, model) {
+            async function sendToGroq(prompt, apiKey, model, config = {}) {
                 const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                     method: 'POST',
                     headers: {
@@ -249,19 +789,21 @@
                         messages: [
                             { role: 'user', content: prompt }
                         ],
-                        temperature: 0.7,
-                        max_tokens: 4096
+                        temperature: parseFloat(config.temperature) || 0.7,
+                        max_tokens: parseInt(config.maxTokens) || 4096
                     })
                 });
+
                 if (!response.ok) {
                     const errorText = await response.text();
                     throw new Error(`Groq API error (${response.status}): ${errorText}`);
                 }
+
                 const data = await response.json();
                 return data.choices[0].message.content;
             }
 
-            async function sendToOpenAI(prompt, apiKey, model) {
+            async function sendToOpenAI(prompt, apiKey, model, config = {}) {
                 const response = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST',
                     headers: {
@@ -273,19 +815,21 @@
                         messages: [
                             { role: 'user', content: prompt }
                         ],
-                        temperature: 0.7,
-                        max_tokens: 4096
+                        temperature: parseFloat(config.temperature) || 0.7,
+                        max_tokens: parseInt(config.maxTokens) || 4096
                     })
                 });
+
                 if (!response.ok) {
                     const errorText = await response.text();
                     throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
                 }
+
                 const data = await response.json();
                 return data.choices[0].message.content;
             }
 
-            async function sendToGemini(prompt, apiKey, model) {
+            async function sendToGemini(prompt, apiKey, model, config = {}) {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
                 const response = await fetch(url, {
                     method: 'POST',
@@ -299,34 +843,176 @@
                             }
                         ],
                         generationConfig: {
-                            temperature: 0.7,
-                            maxOutputTokens: 4096
+                            temperature: parseFloat(config.temperature) || 0.7,
+                            maxOutputTokens: parseInt(config.maxTokens) || 4096
                         }
                     })
                 });
+
                 if (!response.ok) {
                     const errorText = await response.text();
                     throw new Error(`Gemini API error (${response.status}): ${errorText}`);
                 }
+
                 const data = await response.json();
                 if (data.candidates && data.candidates.length > 0) {
                     return data.candidates[0].content.parts[0].text;
                 } else {
-                    throw new Error('No response from Gemini');
+                    throw new Error('پاسخی از Gemini دریافت نشد');
                 }
             }
 
-            async function callAI(prompt, service, apiKey, model) {
+            async function callAI(prompt, service, apiKey, model, config = {}) {
                 switch (service) {
                     case 'groq':
-                        return await sendToGroq(prompt, apiKey, model);
+                        return await sendToGroq(prompt, apiKey, model, config);
                     case 'openai':
-                        return await sendToOpenAI(prompt, apiKey, model);
+                        return await sendToOpenAI(prompt, apiKey, model, config);
                     case 'gemini':
-                        return await sendToGemini(prompt, apiKey, model);
+                        return await sendToGemini(prompt, apiKey, model, config);
+                    case 'custom':
+                        // Implement custom API call
+                        throw new Error('Custom API پشتیبانی نمی‌شود');
                     default:
-                        throw new Error('Unknown service selected');
+                        throw new Error('سرویس ناشناخته انتخاب شده است');
                 }
+            }
+
+            // ==================== MULTIMODAL SUPPORT ====================
+            async function processMultimodalRequest(request) {
+                const metadata = request.metadata || {};
+
+                if (metadata.multimodal) {
+                    const images = metadata.images || [];
+                    const text = metadata.text || request.payload;
+
+                    addLog(`📸 پردازش درخواست Multimodal با ${images.length} تصویر`);
+
+                    // Load images from bridge server
+                    const imageContents = [];
+                    for (const imageId of images) {
+                        try {
+                            const imgRes = await fetch(`${BRIDGE_SERVER}/api/v1/image/${imageId}`);
+                            const imgData = await imgRes.json();
+
+                            if (imgData.status === "success") {
+                                imageContents.push({
+                                    type: "image",
+                                    data: imgData.image.data,
+                                    mimeType: imgData.image.type
+                                });
+                                addLog(`✅ تصویر ${imageId.substring(0, 8)}... بارگذاری شد`, 'success');
+                            }
+                        } catch (err) {
+                            addLog(`⚠️ خطا در بارگذاری تصویر ${imageId}: ${err.message}`, 'error');
+                        }
+                    }
+
+                    return await callMultimodalAI(text, imageContents, serviceSelect.value,
+                                                 apiKeyInput.value.trim(),
+                                                 modelInput.value.trim());
+                }
+
+                return await callAI(request.payload, serviceSelect.value,
+                                   apiKeyInput.value.trim(),
+                                   modelInput.value.trim());
+            }
+
+            async function callMultimodalAI(text, images, service, apiKey, model) {
+                switch (service) {
+                    case 'openai':
+                        return await sendMultimodalToOpenAI(text, images, apiKey, model);
+                    case 'groq':
+                        return await sendMultimodalToGroq(text, images, apiKey, model);
+                    case 'gemini':
+                        return await sendMultimodalToGemini(text, images, apiKey, model);
+                    default:
+                        throw new Error('Multimodal برای این سرویس پشتیبانی نمی‌شود');
+                }
+            }
+
+            async function sendMultimodalToOpenAI(text, images, apiKey, model) {
+                const content = [];
+
+                if (text) {
+                    content.push({ type: "text", text: text });
+                }
+
+                for (const img of images) {
+                    content.push({
+                        type: "image_url",
+                        image_url: {
+                            url: `data:${img.mimeType};base64,${img.data}`
+                        }
+                    });
+                }
+
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            {
+                                role: 'user',
+                                content: content
+                            }
+                        ],
+                        max_tokens: parseInt(maxTokens.value) || 4096
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`OpenAI Multimodal error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data.choices[0].message.content;
+            }
+
+            async function sendMultimodalToGroq(text, images, apiKey, model) {
+                const content = [];
+
+                if (text) {
+                    content.push({ type: "text", text: text });
+                }
+
+                for (const img of images) {
+                    content.push({
+                        type: "image_url",
+                        image_url: {
+                            url: `data:${img.mimeType};base64,${img.data}`
+                        }
+                    });
+                }
+
+                const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            {
+                                role: 'user',
+                                content: content
+                            }
+                        ],
+                        max_tokens: parseInt(maxTokens.value) || 4096
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Groq Multimodal error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data.choices[0].message.content;
             }
 
             // ==================== BRIDGE COMMUNICATION ====================
@@ -339,43 +1025,72 @@
 
                     if (data.status === 'pending' && data.request && !processing) {
                         processing = true;
+                        showProgress(true);
+
                         const request = data.request;
                         const requestId = request.id;
-                        const prompt = request.payload;
+                        const startTime = Date.now();
 
-                        addLog(`📥 Received request ${requestId.substring(0,8)}...`);
-                        setStatus('Processing request...', 'active');
+                        addLog(`📥 دریافت درخواست ${requestId.substring(0, 8)}...`);
+                        setStatus('در حال پردازش درخواست...', 'active');
 
                         const service = serviceSelect.value;
-                        const apiKey = apiKeyInput.value.trim() || DEFAULT_KEYS[service];
+                        const apiKey = apiKeyInput.value.trim();
                         const model = modelInput.value.trim() || DEFAULT_MODELS[service];
 
                         if (!apiKey) {
-                            addLog(`❌ No API key provided for ${service}`, 'error');
-                            await sendErrorResponse(requestId, 'API key missing');
+                            addLog('❌ کلید API موجود نیست. فایل .env را بارگذاری کنید', 'error');
+                            await sendErrorResponse(requestId, 'کلید API موجود نیست');
+                            statistics.failedRequests++;
                         } else {
                             try {
-                                const responseText = await callAI(prompt, service, apiKey, model);
-                                addLog(`✅ Response received (${responseText.length} chars)`);
-                                await sendSuccessResponse(requestId, responseText);
-                                setStatus('Response sent back to bridge', 'active');
+                                const config = {
+                                    temperature: temperature.value,
+                                    maxTokens: maxTokens.value
+                                };
+
+                                const responseText = await processMultimodalRequest(request);
+
+                                const responseTime = Date.now() - startTime;
+                                statistics.totalRequests++;
+                                statistics.successfulRequests++;
+                                statistics.totalResponseTime += responseTime;
+
+                                addLog(`✅ پاسخ دریافت شد (${responseText.length} کاراکتر) در ${responseTime}ms`, 'success');
+
+                                if (streamMode.checked) {
+                                    await sendStreamingResponse(requestId, responseText);
+                                } else {
+                                    await sendSuccessResponse(requestId, responseText);
+                                }
+
+                                setStatus('پاسخ به Bridge ارسال شد', 'active');
+                                updateStats();
+
                             } catch (err) {
-                                addLog(`❌ API error: ${err.message}`, 'error');
+                                statistics.totalRequests++;
+                                statistics.failedRequests++;
+                                addLog(`❌ خطای API: ${err.message}`, 'error');
                                 await sendErrorResponse(requestId, err.message);
-                                setStatus('Error occurred', 'error');
+                                setStatus('خطا در پردازش', 'error');
+                                updateStats();
                             }
                         }
+
                         processing = false;
+                        showProgress(false);
                     }
                 } catch (err) {
-                    // Network error or server not reachable
-                    addLog(`⚠️ Bridge server not reachable: ${err.message}`, 'error');
-                    setStatus('Bridge server offline', 'error');
+                    if (err.message.includes('Failed to fetch')) {
+                        addLog('⚠️ سرور Bridge در دسترس نیست', 'error');
+                        setStatus('سرور Bridge آفلاین است', 'error');
+                    } else {
+                        addLog(`⚠️ خطا: ${err.message}`, 'error');
+                    }
                 }
 
-                // Schedule next poll
                 if (isPolling) {
-                    pollTimeout = setTimeout(pollBridge, 1000);
+                    pollTimeout = setTimeout(pollBridge, POLL_INTERVAL);
                 }
             }
 
@@ -390,11 +1105,12 @@
                             type: 'text'
                         })
                     });
+
                     if (!res.ok) {
-                        addLog(`⚠️ Failed to send response to bridge: ${res.status}`, 'error');
+                        addLog(`⚠️ خطا در ارسال پاسخ: ${res.status}`, 'warning');
                     }
                 } catch (err) {
-                    addLog(`⚠️ Error sending response: ${err.message}`, 'error');
+                    addLog(`⚠️ خطا در ارسال پاسخ: ${err.message}`, 'error');
                 }
             }
 
@@ -405,74 +1121,125 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             request_id: requestId,
-                            response: `❌ Bridge error: ${errorText}`,
+                            response: `❌ خطا: ${errorText}`,
                             type: 'error'
                         })
                     });
+
                     if (!res.ok) {
-                        addLog(`⚠️ Failed to send error response: ${res.status}`, 'error');
+                        addLog(`⚠️ خطا در ارسال پاسخ خطا: ${res.status}`, 'warning');
                     }
                 } catch (err) {
-                    addLog(`⚠️ Error sending error response: ${err.message}`, 'error');
+                    addLog(`⚠️ خطا در ارسال پاسخ خطا: ${err.message}`, 'error');
                 }
             }
 
+            async function sendStreamingResponse(requestId, fullText) {
+                const chunks = fullText.match(/.{1,50}/g) || [fullText];
+
+                for (const chunk of chunks) {
+                    try {
+                        const res = await fetch(`${BRIDGE_SERVER}/api/v1/stream/${requestId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                chunk: chunk
+                            })
+                        });
+
+                        if (!res.ok) {
+                            addLog(`⚠️ خطا در ارسال chunk: ${res.status}`, 'warning');
+                        }
+
+                        // Small delay for streaming effect
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    } catch (err) {
+                        addLog(`⚠️ خطا در streaming: ${err.message}`, 'error');
+                    }
+                }
+
+                // Send final response
+                await sendSuccessResponse(requestId, fullText);
+            }
+
             // ==================== UI CONTROLS ====================
-            startBtn.addEventListener('click', () => {
+            function startPolling() {
                 if (isPolling) return;
+
                 isPolling = true;
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
-                setStatus('Polling started', 'active');
-                addLog('🚀 Polling started');
-                pollBridge();
-            });
 
-            stopBtn.addEventListener('click', () => {
+                setStatus('Polling شروع شد', 'active');
+                addLog('🚀 Polling شروع شد', 'success');
+
+                pollBridge();
+            }
+
+            function stopPolling() {
                 isPolling = false;
-                if (pollTimeout) clearTimeout(pollTimeout);
+
+                if (pollTimeout) {
+                    clearTimeout(pollTimeout);
+                }
+
                 startBtn.disabled = false;
                 stopBtn.disabled = true;
-                setStatus('Polling stopped');
-                addLog('⏹️ Polling stopped');
-            });
 
-            // Auto-load saved values (optional)
-            function loadConfig() {
-                const savedService = localStorage.getItem('bridge_service');
-                const savedApiKey = localStorage.getItem('bridge_api_key');
-                const savedModel = localStorage.getItem('bridge_model');
-                if (savedService) serviceSelect.value = savedService;
-                if (savedApiKey) apiKeyInput.value = savedApiKey;
-                if (savedModel) modelInput.value = savedModel;
+                setStatus('Polling متوقف شد');
+                addLog('⏹️ Polling متوقف شد', 'warning');
+
+                showProgress(false);
             }
 
-            function saveConfig() {
-                localStorage.setItem('bridge_service', serviceSelect.value);
-                localStorage.setItem('bridge_api_key', apiKeyInput.value);
-                localStorage.setItem('bridge_model', modelInput.value);
+            async function testConnection() {
+                addLog('🧪 تست اتصال به Bridge Server...');
+
+                try {
+                    const res = await fetch(`${BRIDGE_SERVER}/health`);
+                    const data = await res.json();
+
+                    if (data.status === 'healthy') {
+                        setStatus('اتصال به Bridge Server برقرار است', 'active');
+                        addLog('✅ اتصال به Bridge Server موفقیت‌آمیز بود', 'success');
+                        addLog(`📊 آمار سرور: ${data.data.statistics.total_requests} درخواست`, 'info');
+                    } else {
+                        setStatus('سرور Bridge در دسترس نیست', 'error');
+                        addLog('❌ سرور Bridge پاسخ نمی‌دهد', 'error');
+                    }
+                } catch (err) {
+                    setStatus('سرور Bridge آفلاین است', 'error');
+                    addLog('❌ نمی‌توان به Bridge Server متصل شد. ابتدا bridge_server.py را اجرا کنید', 'error');
+                }
             }
 
-            serviceSelect.addEventListener('change', saveConfig);
-            apiKeyInput.addEventListener('input', saveConfig);
-            modelInput.addEventListener('input', saveConfig);
+            // Event listeners
+            startBtn.addEventListener('click', startPolling);
+            stopBtn.addEventListener('click', stopPolling);
+            clearLogBtn.addEventListener('click', clearLog);
+            testBtn.addEventListener('click', testConnection);
 
-            // Initialize
-            loadConfig();
-            if (!apiKeyInput.value) {
-                apiKeyInput.placeholder = `Enter ${serviceSelect.value} API key`;
+            // ==================== INITIALIZATION ====================
+            function initialize() {
+                // Set default model placeholders
+                updateServiceConfig();
+
+                // Add initial log
+                addLog('🌉 Bridge Client آماده استفاده است');
+                addLog('📁 فایل .env را برای پیکربندی بارگذاری کنید');
+                addLog('🔑 کلیدهای API به صورت محلی و امن نگهداری می‌شوند');
+
+                // Check bridge server connection
+                testConnection();
+
+                // Auto-start if configured
+                if (autoStart.checked && apiKeyInput.value) {
+                    startPolling();
+                }
             }
 
-            // Test if bridge server is reachable on load
-            fetch(`${BRIDGE_SERVER}/health`)
-                .then(() => {
-                    setStatus('Bridge server reachable', 'active');
-                    addLog('✅ Connected to bridge server');
-                })
-                .catch(() => {
-                    setStatus('Bridge server offline', 'error');
-                    addLog('❌ Cannot reach bridge server. Start bridge_server.py first.', 'error');
-                });
+            // Start the application
+            initialize();
         })();
     </script>
 </body>
