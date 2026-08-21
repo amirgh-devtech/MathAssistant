@@ -1413,7 +1413,7 @@ class VectorTab(QWidget):
 
         # دکمه ذخیره
         control_layout.addWidget(
-            self._create_button("📥 ذخیره تصویر", self._export_image),
+            self._create_button("📥 ذخیره تصویر", self._export_image, accent=True),
         )
         control_layout.addStretch()
 
@@ -1788,38 +1788,38 @@ class GraphTab(QWidget):
         control_layout.addWidget(list_group)
 
         # گروه کد
-        code_group = QGroupBox("💻 کد پایتون")
-        code_group.setFont(QFont("B Nazanin", 14, QFont.Weight.Bold))
-        code_group.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        # code_group = QGroupBox("💻 کد پایتون")
+        # code_group.setFont(QFont("B Nazanin", 14, QFont.Weight.Bold))
+        # code_group.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
 
-        code_layout = QVBoxLayout(code_group)
-        code_layout.setSpacing(8)
-        code_layout.setContentsMargins(10, 24, 10, 10)
+        # code_layout = QVBoxLayout(code_group)
+        # code_layout.setSpacing(8)
+        # code_layout.setContentsMargins(10, 24, 10, 10)
 
-        self._code_editor = QTextEdit()
-        self._code_editor.setPlaceholderText(
-            "import numpy as np\n"
-            "x = np.linspace(-10, 10, 500)\n"
-            "ax.plot(x, np.sin(x), color='red', label='sin(x)')\n"
-            "ax.legend()"
-        )
-        self._code_editor.setFont(QFont("Consolas", 10))
-        self._code_editor.setMaximumHeight(80)
-        self._code_editor.setMinimumHeight(50)
-        self._code_editor.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
-        code_layout.addWidget(self._code_editor)
+        # self._code_editor = QTextEdit()
+        # self._code_editor.setPlaceholderText(
+        #     "import numpy as np\n"
+        #     "x = np.linspace(-10, 10, 500)\n"
+        #     "ax.plot(x, np.sin(x), color='red', label='sin(x)')\n"
+        #     "ax.legend()"
+        # )
+        # self._code_editor.setFont(QFont("Consolas", 10))
+        # self._code_editor.setMaximumHeight(80)
+        # self._code_editor.setMinimumHeight(50)
+        # self._code_editor.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        # code_layout.addWidget(self._code_editor)
 
-        self._run_button = self._create_button(
-            "▶️ اجرای کد", self._run_code, accent=True,
-        )
-        code_layout.addWidget(self._run_button)
-        control_layout.addWidget(code_group)
+        # self._run_button = self._create_button(
+        #     "▶️ اجرای کد", self._run_code, accent=True,
+        # )
+        # code_layout.addWidget(self._run_button)
+        # control_layout.addWidget(code_group)
 
         # دکمه‌های پایین
         action_layout = QHBoxLayout()
         action_layout.setSpacing(6)
         action_layout.addWidget(
-            self._create_button("📥 ذخیره تصویر", self._export_image),
+            self._create_button("📥 ذخیره تصویر", self._export_image, accent=True),
         )
         action_layout.addWidget(
             self._create_button("🔍 پیش‌نمایش", self._preview, accent=True),

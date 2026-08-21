@@ -1,38 +1,8 @@
 """
 پنجره اصلی برنامه MathAssistant - نسخه نهایی Production-Ready
 
-این ماژول شامل پنجره اصلی برنامه با معماری کاملاً refactored شده است:
-
-Components:
-- GradientWidget: پس‌زمینه گرادیانت متحرک (Dependency Injection, CPU Optimized)
-- ChildWindowManager: مدیریت پنجره‌های فرزند (Thread-Safe, No Memory Leak)
-- MenuManager: مدیریت منوها (SRP, Dynamic Menu Support)
-- MainWindow: Facade با Dependency Injection کامل
-
-Design Patterns:
-- Dependency Injection: Theme, AppLauncher, ChildWindowManager
-- Singleton: ThemeManager
-- Strategy: ChildWindowManager
-- Observer: Theme changes
-- Facade: MainWindow
-- Factory Method: ChildWindowManager.open_or_focus
-
-SOLID Principles:
-- S: Single Responsibility (هر کلاس یک وظیفه)
-- O: Open/Closed (قابل گسترش بدون تغییر کد موجود)
-- L: Liskov Substitution (ThemeProvider Protocol)
-- I: Interface Segregation (پروتکل‌های مجزا)
-- D: Dependency Inversion (وابستگی به abstraction)
-
-Thread Safety:
-- ChildWindowManager: Lock برای open_or_focus
-- GradientWidget: QTimer در Main Thread
-- Qt Signals: DirectConnection برای پاکسازی فوری
-
-Testability: Full (همه وابستگی‌ها injectable)
-
 Author: AmirMohammad Ghasemzadeh
-Version: 4.0.0 - Production Ready
+Version: 4.0.2 - Platinum Edition
 """
 
 import os
@@ -40,6 +10,7 @@ import sys
 import math
 import logging
 import threading
+import weakref
 from typing import (
     Optional, List, Tuple, Dict, Callable, Any, Protocol, runtime_checkable
 )
@@ -90,16 +61,10 @@ QColor = _adapter.QColor
 QPainter = _adapter.QPainter
 QLinearGradient = _adapter.QLinearGradient
 QRadialGradient = _adapter.QRadialGradient
-QGraphicsView = _adapter.QGraphicsView
-QGraphicsScene = _adapter.QGraphicsScene
-QGraphicsPixmapItem = _adapter.QGraphicsPixmapItem
-QTransform = _adapter.QTransform
 
 # Enums
 Qt = _adapter.Qt
 AlignCenter = _adapter.AlignCenter
-AlignRight = _adapter.AlignRight
-AlignLeft = _adapter.AlignLeft
 RichText = _adapter.RichText
 PlainText = _adapter.PlainText
 
@@ -112,8 +77,7 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class ThemeProvider(Protocol):
-    """پروتکل برای theme provider - قابل تعویض برای تست."""
-
+    """پروتکل برای theme provider."""
     @property
     def mode(self) -> ThemeMode: ...
     @property
@@ -124,7 +88,6 @@ class ThemeProvider(Protocol):
     def qt_version(self) -> Any: ...
     @property
     def windows_version(self) -> str: ...
-
     def color(self, key: str) -> str: ...
     def get_app_font(self) -> Any: ...
     def get_title_font(self) -> Any: ...
@@ -142,8 +105,7 @@ class ThemeProvider(Protocol):
 
 @runtime_checkable
 class AppLauncherProtocol(Protocol):
-    """پروتکل برای app launcher - قابل تعویض برای تست."""
-
+    """پروتکل برای app launcher."""
     @staticmethod
     def launch_calculator() -> Tuple[bool, str]: ...
     @staticmethod
@@ -155,31 +117,9 @@ class AppLauncherProtocol(Protocol):
 # ============================================================================
 # Error Handling Decorator
 # ============================================================================
-def _show_message(self, icon, title, text):
-    msg = QMessageBox(self)
-    msg.setIcon(icon)
-    msg.setWindowTitle(title)
-    msg.setText(text)
-    try:
-        msg.setStyleSheet(self._theme.get_message_box_style())
-    except Exception:
-        pass
-    try:
-        msg.exec()
-    except AttributeError:
-        msg.exec_()
 
 def show_error_on_failure(func: Callable) -> Callable:
-    """
-    Decorator برای نمایش خطاهای غیرمنتظره در QMessageBox.
-
-    تمام Exceptionهای پیش‌بینی نشده را catch کرده و
-    به کاربر نمایش می‌دهد بدون اینکه برنامه crash کند.
-    """
-def show_error_on_failure(func: Callable) -> Callable:
-    """
-    Decorator برای نمایش خطاهای غیرمنتظره در QMessageBox.
-    """
+    """Decorator برای نمایش خطاهای غیرمنتظره."""
     @wraps(func)
     def wrapper(self, *args, **kwargs):
         try:
@@ -187,60 +127,23 @@ def show_error_on_failure(func: Callable) -> Callable:
         except Exception as e:
             logger.exception(f"Error in {func.__name__}: {e}")
             try:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Icon.Critical)
-                msg.setWindowTitle("خطای غیرمنتظره")
-                msg.setText(
-                    f"متأسفانه خطایی رخ داد:\n\n{str(e)}\n\n"
-                    f"لطفاً این خطا را به تیم توسعه گزارش دهید."
+                QMessageBox.critical(
+                    self,
+                    "خطای غیرمنتظره",
+                    f"متأسفانه خطایی رخ داد:\n\n{str(e)}"
                 )
-
-                # Style از Theme
-                if hasattr(self, '_theme'):
-                    msg.setStyleSheet(f"""
-                        QMessageBox {{
-                            background-color: {self._theme.palette.background};
-                            color: {self._theme.palette.text_primary};
-                            font-family: 'Arial';
-                            font-size: 10pt;
-                        }}
-                        QLabel {{
-                            color: {self._theme.palette.text_primary};
-                        }}
-                        QPushButton {{
-                            background-color: {self._theme.palette.primary};
-                            color: white;
-                            border-radius: 6px;
-                            padding: 6px 20px;
-                            min-width: 80px;
-                            font-family: 'Arial';
-                        }}
-                        QPushButton:hover {{
-                            background-color: {self._theme.palette.primary_dark};
-                        }}
-                    """)
-
-                msg.exec()
             except Exception:
                 pass
     return wrapper
 
 
 # ============================================================================
-# Gradient Widget - پس‌زمینه متحرک
+# Gradient Widget
 # ============================================================================
 
 class GradientWidget(QWidget):
-    """
-    ویجت پس‌زمینه با گرادیانت چرخشی و ripple effect.
+    """ویجت پس‌زمینه با گرادیانت چرخشی."""
 
-    Design:
-    - Dependency Injection برای theme
-    - CPU Optimization (visibility check, dirty regions)
-    - Cleanup کامل (timer, theme subscription, ripples)
-    """
-
-    # ثابت‌های انیمیشن
     ANIMATION_FPS: int = 30
     ANIMATION_INTERVAL: int = 1000 // ANIMATION_FPS
     RIPPLE_GROWTH_RATE: float = 4.0
@@ -250,34 +153,25 @@ class GradientWidget(QWidget):
     GRADIENT_ROTATION_SPEED: float = 1.0
     GRADIENT_OFFSET_SPEED: float = 0.5
 
-    # رنگ‌های پیش‌فرض (Fallback)
     DEFAULT_COLORS: List[QColor] = [
         QColor(74, 144, 226),
         QColor(106, 82, 181),
         QColor(142, 68, 173),
     ]
 
-    def __init__(
-        self,
-        parent: Optional[QWidget] = None,
-        theme_provider: Optional[ThemeProvider] = None
-    ):
+    def __init__(self, parent: Optional[QWidget] = None,
+                 theme_provider: Optional[ThemeProvider] = None):
         super().__init__(parent)
-
         self._theme = theme_provider or default_theme
-
-        # State
-        self._gradient_offset: float = 0.0
-        self._gradient_angle: float = 130.0
+        self._gradient_offset = 0.0
+        self._gradient_angle = 130.0
         self._ripples: List[Tuple[float, float, float]] = []
-        self._is_animating: bool = True
+        self._is_animating = True
 
-        # Timer
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._update_animation)
         self._timer.start(self.ANIMATION_INTERVAL)
 
-        # Layout با container
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -286,23 +180,19 @@ class GradientWidget(QWidget):
         container_layout.setContentsMargins(20, 20, 20, 20)
         self._container.setLayout(container_layout)
         self._container.setAlignment(AlignCenter)
-
         main_layout.addWidget(self._container)
 
         self.setMinimumSize(400, 300)
         self._update_container_style()
 
-        # Subscribe به تغییرات تم
         if hasattr(self._theme, 'subscribe'):
             self._theme.subscribe(self._on_theme_changed)
 
     def _on_theme_changed(self, mode: ThemeMode) -> None:
-        """واکنش به تغییر تم."""
         self._update_container_style()
         self.update()
 
     def _update_container_style(self) -> None:
-        """به‌روزرسانی استایل container."""
         try:
             glass = GlassmorphismSystem.get_glass_style_sheet(
                 self._theme.glass_level,
@@ -321,16 +211,10 @@ class GradientWidget(QWidget):
             logger.warning(f"Failed to update container style: {e}")
 
     def _update_animation(self) -> None:
-        """به‌روزرسانی فریم انیمیشن."""
         if not self.isVisible():
             return
-
-        self._gradient_offset = (
-            self._gradient_offset + self.GRADIENT_OFFSET_SPEED
-        ) % 100
-        self._gradient_angle = (
-            self._gradient_angle + self.GRADIENT_ROTATION_SPEED
-        ) % 360
+        self._gradient_offset = (self._gradient_offset + self.GRADIENT_OFFSET_SPEED) % 100
+        self._gradient_angle = (self._gradient_angle + self.GRADIENT_ROTATION_SPEED) % 360
 
         active_ripples = []
         for x, y, radius in self._ripples:
@@ -343,24 +227,21 @@ class GradientWidget(QWidget):
             self.update()
 
     def paintEvent(self, event) -> None:
-        """رسم گرادیانت و rippleها."""
         painter = QPainter(self)
         try:
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)  # PyQt6
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         except AttributeError:
-            painter.setRenderHint(QPainter.Antialiasing)  # PyQt5 fallback
+            painter.setRenderHint(QPainter.Antialiasing)
         painter.setClipRect(event.rect())
 
         angle_rad = math.radians(self._gradient_angle)
         cx, cy = self.width() / 2, self.height() / 2
-
         x1 = int(cx * (1 + math.cos(angle_rad)))
         y1 = int(cy * (1 - math.sin(angle_rad)))
         x2 = int(cx * (1 - math.cos(angle_rad)))
         y2 = int(cy * (1 + math.sin(angle_rad)))
 
         gradient = QLinearGradient(x1, y1, x2, y2)
-
         try:
             colors = [
                 QColor(self._theme.color('gradient_start')),
@@ -371,18 +252,13 @@ class GradientWidget(QWidget):
             colors = self.DEFAULT_COLORS
 
         for i, color in enumerate(colors):
-            pos = (
-                self._gradient_offset + i * (100 / len(colors))
-            ) % 100 / 100.0
+            pos = (self._gradient_offset + i * (100 / len(colors))) % 100 / 100.0
             gradient.setColorAt(pos, color)
 
         painter.fillRect(self.rect(), gradient)
 
         for x, y, radius in self._ripples:
-            alpha = max(
-                0,
-                self.RIPPLE_INITIAL_ALPHA - int(radius * self.RIPPLE_ALPHA_DECAY)
-            )
+            alpha = max(0, self.RIPPLE_INITIAL_ALPHA - int(radius * self.RIPPLE_ALPHA_DECAY))
             if alpha > 0:
                 ripple = QRadialGradient(x, y, radius)
                 ripple.setColorAt(0, QColor(255, 255, 255, alpha))
@@ -390,17 +266,11 @@ class GradientWidget(QWidget):
                 painter.fillRect(self.rect(), ripple)
 
     def mousePressEvent(self, event) -> None:
-        """ثبت کلیک برای ripple effect."""
         if event.button() == _adapter.LeftButton:
-            self._ripples.append((
-                float(event.pos().x()),
-                float(event.pos().y()),
-                0.0
-            ))
+            self._ripples.append((float(event.pos().x()), float(event.pos().y()), 0.0))
         super().mousePressEvent(event)
 
     def cleanup(self) -> None:
-        """پاکسازی کامل منابع."""
         self._timer.stop()
         self._timer.deleteLater()
         self._ripples.clear()
@@ -413,42 +283,34 @@ class GradientWidget(QWidget):
 
 
 # ============================================================================
-# Child Window Manager (Thread-Safe)
+# Child Window Manager - PLATINUM FIX
 # ============================================================================
 
 class ChildWindowManager:
     """
-    مدیریت پنجره‌های فرزند - Thread-Safe با چرخه حیات کامل.
+    مدیریت پنجره‌های فرزند - نسخه Platinum.
 
-    Features:
-    - Thread-Safe با Lock
-    - DirectConnection برای پاکسازی فوری
-    - Lazy loading با factory
-    - No Memory Leak (destroyed.connect)
+    FIX: محافظت کامل در برابر خطاهای lifecycle
     """
 
     def __init__(self):
-        self._windows: Dict[str, Any] = {}
+        # استفاده از RLock برای thread safety
         self._lock = threading.RLock()
+        self._windows: Dict[str, Any] = {}
+        self._closed = False
         logger.debug("ChildWindowManager initialized")
 
-    def open_or_focus(
-        self,
-        key: str,
-        factory: Callable[[], Any],
-        *factory_args,
-        **factory_kwargs
-    ) -> None:
-        """
-        باز کردن یا focus کردن پنجره (Thread-Safe).
+    def _ensure_not_closed(self) -> bool:
+        """بررسی اینکه manager بسته نشده باشد."""
+        return not getattr(self, '_closed', True)
 
-        Args:
-            key: کلید یکتا
-            factory: تابع سازنده
-            *factory_args, **factory_kwargs: آرگومان‌های factory
-        """
+    def open_or_focus(self, key: str, factory: Callable[[], Any],
+                      *factory_args, **factory_kwargs) -> None:
+        """باز کردن یا focus کردن پنجره."""
+        if not hasattr(self, '_lock') or not hasattr(self, '_windows'):
+            return
+
         with self._lock:
-            # Check existing window
             if key in self._windows:
                 try:
                     window = self._windows[key]
@@ -460,33 +322,45 @@ class ChildWindowManager:
                 except RuntimeError:
                     del self._windows[key]
 
-            # Create new window
             try:
                 window = factory(*factory_args, **factory_kwargs)
                 self._windows[key] = window
 
-                # DirectConnection برای پاکسازی فوری
                 if hasattr(window, 'destroyed'):
+                    # استفاده از lambda با بررسی وجود manager
                     window.destroyed.connect(
-                        lambda obj=None, k=key: self._on_window_destroyed(k)
+                        lambda obj=None, k=key: self._safe_on_destroyed(k)
                     )
 
                 window.show()
                 logger.debug(f"Child window opened: {key}")
-
             except Exception as e:
                 logger.error(f"Failed to create child window '{key}': {e}")
                 raise
 
+    def _safe_on_destroyed(self, key: str) -> None:
+        """نسخه امن _on_window_destroyed."""
+        try:
+            # بررسی وجود attributes
+            if not hasattr(self, '_lock') or not hasattr(self, '_windows'):
+                return
+
+            with self._lock:
+                if key in self._windows:
+                    del self._windows[key]
+                    logger.debug(f"Child window destroyed: {key}")
+        except Exception as e:
+            logger.debug(f"Safe cleanup for {key}: {e}")
+
     def _on_window_destroyed(self, key: str) -> None:
-        """Callback پاکسازی فوری."""
-        with self._lock:
-            if key in self._windows:
-                del self._windows[key]
-                logger.debug(f"Child window destroyed: {key}")
+        """نسخه اصلی - صدا زده می‌شود از _safe_on_destroyed."""
+        self._safe_on_destroyed(key)
 
     def close_window(self, key: str) -> None:
         """بستن یک پنجره."""
+        if not hasattr(self, '_lock') or not hasattr(self, '_windows'):
+            return
+
         with self._lock:
             if key in self._windows:
                 try:
@@ -498,6 +372,9 @@ class ChildWindowManager:
 
     def close_all(self) -> None:
         """بستن همه پنجره‌ها."""
+        if not hasattr(self, '_lock') or not hasattr(self, '_windows'):
+            return
+
         with self._lock:
             for key in list(self._windows.keys()):
                 self.close_window(key)
@@ -505,46 +382,42 @@ class ChildWindowManager:
 
     @property
     def open_count(self) -> int:
+        if not hasattr(self, '_lock') or not hasattr(self, '_windows'):
+            return 0
         with self._lock:
             return len(self._windows)
 
     def has_window(self, key: str) -> bool:
+        if not hasattr(self, '_lock') or not hasattr(self, '_windows'):
+            return False
         with self._lock:
             return key in self._windows
 
 
 # ============================================================================
-# Menu Manager (SRP)
+# Menu Manager
 # ============================================================================
 
 class MenuManager:
-    """مدیریت منوها با مسئولیت واحد."""
+    """مدیریت منوها."""
 
-    def __init__(
-        self,
-        parent: QMainWindow,
-        theme_provider: Optional[ThemeProvider] = None
-    ):
+    def __init__(self, parent: QMainWindow,
+                 theme_provider: Optional[ThemeProvider] = None):
         self._parent = parent
         self._theme = theme_provider or default_theme
 
     def create_menus(self, callbacks: Dict[str, Callable]) -> None:
-        """ایجاد تمام منوها.""" """ایجاد تمام منوها."""
         menubar = self._parent.menuBar()
-
         menubar.setStyleSheet(self._theme.get_menu_bar_style())
-
         self._create_file_menu(menubar, callbacks)
         self._create_view_menu(menubar)
         self._create_tools_menu(menubar, callbacks)
 
-    def _create_file_menu(
-        self, menubar: Any, callbacks: Dict[str, Callable]
-    ) -> None:
-        """منوی فایل."""
+    def _create_file_menu(self, menubar: Any, callbacks: Dict[str, Callable]) -> None:
         file_menu = menubar.addMenu("📁 &فایل")
         items = [
             ("🤖 اجرای دستیار هوش مصنوعی", callbacks.get('ai_chatbot'), "Ctrl+T"),
+            ("🔬 آزمایشگاه مجازی", callbacks.get('smart_lab'), "Ctrl+L"),
             ("🔢 باز کردن ماشین حساب", callbacks.get('calculator'), "Ctrl+C"),
             ("📐 پنجره بردارها", callbacks.get('vector'), "Ctrl+V"),
             ("📝 حل معادلات", callbacks.get('equation'), "Ctrl+E"),
@@ -566,29 +439,19 @@ class MenuManager:
             file_menu.addAction(action)
 
     def _create_view_menu(self, menubar: Any) -> None:
-        """منوی نمایش."""
         view_menu = menubar.addMenu("🎨 &نمایش")
-
         themes_menu = view_menu.addMenu("تم رنگی")
         for mode in ThemeMode:
-            action = QAction(
-                f"  {mode.name.replace('_', ' ').title()}",
-                self._parent
-            )
+            action = QAction(f"  {mode.name.replace('_', ' ').title()}", self._parent)
             action.triggered.connect(partial(self._change_theme, mode))
             themes_menu.addAction(action)
-
         view_menu.addSeparator()
-
         toggle_action = QAction("🌓 تغییر تم روشن/تاریک", self._parent)
         toggle_action.triggered.connect(self._theme.toggle_dark_light)
         toggle_action.setShortcut(QKeySequence("Ctrl+D"))
         view_menu.addAction(toggle_action)
 
-    def _create_tools_menu(
-        self, menubar: Any, callbacks: Dict[str, Callable]
-    ) -> None:
-        """منوی ابزارها."""
+    def _create_tools_menu(self, menubar: Any, callbacks: Dict[str, Callable]) -> None:
         tools_menu = menubar.addMenu("🔧 &ابزارها")
         report_action = QAction("📊 گزارش سیستم", self._parent)
         callback = callbacks.get('system_report')
@@ -598,39 +461,30 @@ class MenuManager:
 
     @staticmethod
     def _change_theme(mode: ThemeMode) -> None:
-        """تغییر تم."""
         default_theme.set_mode(mode)
 
 
 # ============================================================================
-# Main Window (Facade)
+# Main Window
 # ============================================================================
 
 class MainWindow(QMainWindow):
-    """
-    پنجره اصلی - نسخه ۴.۰.۰.
+    """پنجره اصلی - نسخه ۴.۰.۲ Platinum."""
 
-    Dependency Injection کامل برای testability.
-    """
+    WINDOW_TITLE = "کمک معلم ریاضی | Math Assistant"
+    APP_VERSION = "4.0.2"
 
-    WINDOW_TITLE: str = "کمک معلم ریاضی | Math Assistant"
-    APP_VERSION: str = "4.0.0"
-
-    def __init__(
-        self,
-        theme_provider: Optional[ThemeProvider] = None,
-        app_launcher: Optional[AppLauncherProtocol] = None,
-        window_manager: Optional[ChildWindowManager] = None
-    ):
+    def __init__(self, theme_provider: Optional[ThemeProvider] = None,
+                 app_launcher: Optional[AppLauncherProtocol] = None,
+                 window_manager: Optional[ChildWindowManager] = None):
         super().__init__()
 
-        # Dependency Injection
         self._theme = theme_provider or default_theme
         self._launcher = app_launcher or DefaultAppLauncher
         self._window_manager = window_manager or ChildWindowManager()
-
         self._menu_manager = MenuManager(self, self._theme)
         self._ai_chatbot_process: Optional[Any] = None
+        self._lab_manager: Optional[LabManager] = None
 
         self._init_window()
         self._init_ui()
@@ -641,17 +495,12 @@ class MainWindow(QMainWindow):
         if hasattr(self._theme, 'subscribe'):
             self._theme.subscribe(self._on_theme_changed)
 
-        logger.info("MainWindow initialized (v4.0.0)")
-
+        logger.info("MainWindow initialized (v4.0.2)")
         self._apply_dark_menu_style()
 
     def _apply_dark_menu_style(self):
-        """Force dark menu with B Nazanin font - Bold & Larger"""
         menubar = self.menuBar()
         statusbar = self.statusBar()
-
-        menubar.setStyleSheet("")
-        statusbar.setStyleSheet("")
 
         menubar.setStyleSheet("""
             QMenuBar {
@@ -713,21 +562,14 @@ class MainWindow(QMainWindow):
                     }
                 """)
 
-    def _init_window(self) -> None:
+    def _init_window(self):
         self.setWindowTitle(self.WINDOW_TITLE)
         self.setFont(self._theme.get_app_font())
         self._apply_window_size()
         self.setMinimumSize(800, 600)
 
-        # ============================================================
-        # Dark MenuBar & StatusBar - Black BG, White Text, Dark Gray Hover
-        # ============================================================
-
         self.setStyleSheet("""
-            QMainWindow {
-                background-color: #000000;
-            }
-
+            QMainWindow { background-color: #000000; }
             QMenuBar {
                 background-color: #000000;
                 color: #FFFFFF;
@@ -735,7 +577,6 @@ class MainWindow(QMainWindow):
                 border-bottom: 1px solid #1A1A1A;
                 font-size: 13px;
             }
-
             QMenuBar::item {
                 background-color: #000000;
                 color: #FFFFFF;
@@ -743,12 +584,10 @@ class MainWindow(QMainWindow):
                 margin: 1px 2px;
                 border-radius: 4px;
             }
-
             QMenuBar::item:selected {
                 background-color: #2A2A2A;
                 color: #FFFFFF;
             }
-
             QMenu {
                 background-color: #0A0A0A;
                 color: #FFFFFF;
@@ -756,7 +595,6 @@ class MainWindow(QMainWindow):
                 border-radius: 6px;
                 padding: 4px;
             }
-
             QMenu::item {
                 background-color: #0A0A0A;
                 color: #FFFFFF;
@@ -764,18 +602,15 @@ class MainWindow(QMainWindow):
                 margin: 1px 4px;
                 border-radius: 3px;
             }
-
             QMenu::item:selected {
                 background-color: #2A2A2A;
                 color: #FFFFFF;
             }
-
             QMenu::separator {
                 height: 1px;
                 background-color: #1A1A1A;
                 margin: 3px 8px;
             }
-
             QStatusBar {
                 background-color: #000000;
                 color: #999999;
@@ -783,14 +618,13 @@ class MainWindow(QMainWindow):
                 border-top: 1px solid #1A1A1A;
                 font-size: 11px;
             }
-
             QStatusBar QLabel {
                 color: #AAAAAA;
                 background-color: transparent;
             }
         """)
 
-    def _apply_window_size(self) -> None:
+    def _apply_window_size(self):
         try:
             screen = QApplication.primaryScreen()
             if screen:
@@ -807,7 +641,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.warning(f"Failed to set window size: {e}")
 
-    def _init_ui(self) -> None:
+    def _init_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
@@ -824,14 +658,6 @@ class MainWindow(QMainWindow):
         title_label.setAlignment(AlignCenter)
         title_label.setStyleSheet("color: white; margin-bottom: 10px;")
         container_layout.addWidget(title_label)
-
-        version_label = QLabel(f"نسخه {self.APP_VERSION}")
-        version_label.setFont(self._theme.get_font(size=10))
-        version_label.setAlignment(AlignCenter)
-        version_label.setStyleSheet(
-            "color: rgba(255, 255, 255, 180); margin-bottom: 20px;"
-        )
-        # container_layout.addWidget(version_label)
 
         self._setup_buttons(container_layout)
 
@@ -851,8 +677,10 @@ class MainWindow(QMainWindow):
              "حل گام‌به‌گام معادلات ریاضی", 1, 2, 1, 1),
             ("🤖 دستیار هوش مصنوعی", self._launch_ai_chatbot, "Ctrl+T",
              "اجرای چت‌بات هوش مصنوعی", 2, 0, 1, 3),
+            ("🔬 آزمایشگاه مجازی", self._launch_smart_lab, "Ctrl+L",
+             "اجرای آزمایشگاه مجازی هوشمند", 3, 1, 1, 2),
             ("ℹ️ درباره برنامه", self._show_about, "Ctrl+A",
-             "اطلاعات نسخه و توسعه‌دهنده", 3, 0, 1, 3),
+             "اطلاعات نسخه و توسعه‌دهنده", 3, 0, 1, 1),
         ]
 
         for text, callback, shortcut, tooltip, row, col, rs, cs in buttons_data:
@@ -860,20 +688,18 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(lambda checked, cb=callback: cb())
             btn.setToolTip(f"{tooltip}\nمیانبر: {shortcut}")
             btn.setCursor(_adapter.PointingHandCursor)
-
             btn.setStyleSheet(
                 self._theme.get_button_style("primary", "large", full_width=True)
             )
-
             btn.setFont(self._theme.get_font(size=14, bold=True))
-
             button_grid.addWidget(btn, row, col, rs, cs)
 
         layout.addLayout(button_grid)
 
-    def _create_menus(self) -> None:
+    def _create_menus(self):
         callbacks = {
             'ai_chatbot': self._launch_ai_chatbot,
+            'smart_lab': self._launch_smart_lab,
             'calculator': self._open_calculator,
             'vector': self._open_vector_window,
             'equation': self._open_equation_solver,
@@ -887,12 +713,10 @@ class MainWindow(QMainWindow):
         status = self.statusBar()
         font = QFont("Arial", 10)
         status.setFont(font)
-
         try:
             status.setStyleSheet(self._theme.get_status_bar_style())
         except Exception:
             pass
-
         try:
             info = self._theme.get_system_info()
             status.showMessage(
@@ -903,7 +727,7 @@ class MainWindow(QMainWindow):
         except Exception:
             status.showMessage("Welcome to Math Assistant!", 0)
 
-    def _setup_shortcuts(self) -> None:
+    def _setup_shortcuts(self):
         QShortcut(QKeySequence("F11"), self).activated.connect(
             lambda: self.showFullScreen() if not self.isFullScreen()
             else self.showNormal()
@@ -912,10 +736,8 @@ class MainWindow(QMainWindow):
             lambda: self.showNormal() if self.isFullScreen() else None
         )
 
-    def _rebuild_buttons(self) -> None:
-        """بازسازی کامل دکمه‌ها با تم جدید."""
+    def _rebuild_buttons(self):
         container_layout = self._gradient.container.layout()
-
         for i in reversed(range(container_layout.count())):
             item = container_layout.itemAt(i)
             if item.layout() and isinstance(item.layout(), QGridLayout):
@@ -928,11 +750,9 @@ class MainWindow(QMainWindow):
                         w.deleteLater()
                 container_layout.removeItem(item)
                 break
-
         self._setup_buttons(container_layout)
 
-    def _on_theme_changed(self, mode: ThemeMode) -> None:
-        """واکنش به تغییر تم."""
+    def _on_theme_changed(self, mode: ThemeMode):
         try:
             self._create_status_bar()
             self._rebuild_buttons()
@@ -945,43 +765,35 @@ class MainWindow(QMainWindow):
     # ========================================================================
 
     @show_error_on_failure
-    def _open_calculator(self) -> None:
+    def _open_calculator(self):
         success, message = self._launcher.launch_calculator()
         if not success:
             QMessageBox.warning(self, "خطا", message)
 
     @show_error_on_failure
-    def _open_vector_window(self) -> None:
+    def _open_vector_window(self):
         from MathAssistant.ui.vector_window import VectorWindow
         self._window_manager.open_or_focus("vector", VectorWindow)
 
     @show_error_on_failure
-    def _open_equation_solver(self) -> None:
+    def _open_equation_solver(self):
         from MathAssistant.ui.equation_solver_ui import EquationSolverWindow
-        self._window_manager.open_or_focus(
-            "equation_solver", EquationSolverWindow
-        )
+        self._window_manager.open_or_focus("equation_solver", EquationSolverWindow)
 
     @show_error_on_failure
-    def _open_prime_tools(self) -> None:
+    def _open_prime_tools(self):
         from MathAssistant.ui.prime_tools_ui import PrimeToolsWindow
         self._window_manager.open_or_focus("prime_tools", PrimeToolsWindow)
 
     @show_error_on_failure
-    def _launch_ai_chatbot(self) -> None:
-        """اجرای چت‌بات - ساده و مستقیم."""
-
-        # اگر در حال اجراست
+    def _launch_ai_chatbot(self):
         if is_chatbot_running():
             reply = QMessageBox.question(
-                self,
-                "چت‌بات در حال اجراست",
-                "چت‌بات در حال اجراست.\n"
-                "آیا می‌خواهید آن را متوقف کنید؟",
+                self, "چت‌بات در حال اجراست",
+                "چت‌بات در حال اجراست.\nآیا می‌خواهید آن را متوقف کنید؟",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
-
             if reply == QMessageBox.StandardButton.Yes:
                 success, message = stop_chatbot()
                 if success:
@@ -990,20 +802,31 @@ class MainWindow(QMainWindow):
                     QMessageBox.warning(self, "خطا", message)
             return
 
-        # اجرای چت‌بات
         success, message = launch_chatbot()
-
         if success:
             QMessageBox.information(self, "موفق", f"✅ {message}")
         else:
             QMessageBox.warning(self, "خطا", f"❌ {message}")
 
     @show_error_on_failure
-    def _show_about(self) -> None:
+    def _launch_smart_lab(self):
+        try:
+            if self._lab_manager is None:
+                self._lab_manager = LabManager()
+            self._lab_manager.run()
+            logger.info("Smart Lab launched successfully")
+        except Exception as e:
+            logger.error(f"Failed to launch Smart Lab: {e}")
+            QMessageBox.warning(
+                self, "خطا در اجرای آزمایشگاه",
+                f"متأسفانه آزمایشگاه مجازی نتوانست اجرا شود:\n\n{str(e)}"
+            )
+
+    @show_error_on_failure
+    def _show_about(self):
         about_text = f"""
             <div style='text-align: left; direction: rtl; font-size: 12pt;'>
-            <h3 style='color: {self._theme.color('primary')};'>
-            📐 کمک معلم ریاضی</h3>
+            <h3 style='color: {self._theme.color('primary')};'>📐 کمک معلم ریاضی</h3>
             <p><b>نسخه:</b> {self.APP_VERSION}</p>
             <p>مجموعه ابزار ریاضی پیشرفته</p>
             <hr>
@@ -1014,34 +837,23 @@ class MainWindow(QMainWindow):
             <p><b>👨‍💻 توسعه‌دهنده:</b> امیرمحمد قاسم‌زاده</p>
             </div>
         """
-
         msg = QMessageBox(self)
         msg.setWindowTitle("درباره برنامه")
-        try:
-            msg.setIcon(QMessageBox.Icon.Information)
-        except AttributeError:
-            msg.setIcon(QMessageBox.Information)
+        msg.setIcon(QMessageBox.Icon.Information)
         msg.setTextFormat(RichText)
         msg.setMinimumSize(450, 400)
         msg.setText(about_text)
-
-        # Style از theme
         try:
             msg.setStyleSheet(self._theme.get_message_box_style())
         except Exception:
             pass
-
-        try:
-            msg.exec()
-        except AttributeError:
-            msg.exec_()
+        msg.exec()
 
     @show_error_on_failure
-    def _show_system_report(self) -> None:
+    def _show_system_report(self):
         import json
         report = get_system_report()
         report_text = json.dumps(report, indent=2, ensure_ascii=False)
-
         msg = QMessageBox(self)
         msg.setWindowTitle("گزارش سیستم")
         msg.setIcon(QMessageBox.Icon.Information)
@@ -1061,8 +873,7 @@ class MainWindow(QMainWindow):
     # Window Events
     # ========================================================================
 
-    def closeEvent(self, event) -> None:
-        """پاکسازی کامل."""
+    def closeEvent(self, event):
         logger.info("MainWindow closing...")
 
         self._window_manager.close_all()
@@ -1076,6 +887,16 @@ class MainWindow(QMainWindow):
                     self._ai_chatbot_process.kill()
                 except Exception:
                     pass
+
+        if self._lab_manager:
+            try:
+                if hasattr(self._lab_manager, 'cleanup'):
+                    self._lab_manager.cleanup()
+                elif hasattr(self._lab_manager, 'close'):
+                    self._lab_manager.close()
+            except Exception:
+                pass
+            self._lab_manager = None
 
         if hasattr(self, '_gradient'):
             self._gradient.cleanup()
