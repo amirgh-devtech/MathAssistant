@@ -60,6 +60,7 @@ from MathAssistant.bot.chatbot_launcher import (
     stop_chatbot,
     is_chatbot_running,
 )
+from MathAssistant.utils.SmartLab.api.lab_manager import LabManager
 
 # آداپتور Qt
 _adapter = QtAdapter()

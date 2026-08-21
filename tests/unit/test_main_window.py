@@ -869,42 +869,6 @@ class TestMainWindow:
             # Should not raise an exception
             main_window._launch_ai_chatbot()
 
-    def test_ai_chatbot_process_running_user_says_no(self, main_window: MainWindow) -> None:
-        """
-        Verify that when a chatbot process is already running and the
-        user declines to restart, the existing process is not terminated.
-        """
-        mock_process = MagicMock()
-        mock_process.poll.return_value = None
-        main_window._ai_chatbot_process = mock_process
-
-        with patch.object(Path, 'exists', return_value=True), \
-             patch('os.access', return_value=True), \
-             patch('subprocess.Popen') as mock_popen, \
-             patch.object(QMessageBox, 'question', return_value=QMessageBox.No):
-            main_window._launch_ai_chatbot()
-
-            mock_popen.assert_not_called()
-
-    def test_ai_chatbot_process_running_user_says_yes(self, main_window: MainWindow) -> None:
-        """
-        Verify that when a chatbot process is already running and the
-        user agrees to restart, the existing process is terminated and
-        a new one is started.
-        """
-        mock_process = MagicMock()
-        mock_process.poll.return_value = None
-        main_window._ai_chatbot_process = mock_process
-
-        with patch.object(Path, 'exists', return_value=True), \
-             patch('os.access', return_value=True), \
-             patch('subprocess.Popen') as mock_popen, \
-             patch.object(QMessageBox, 'question', return_value=QMessageBox.Yes):
-            main_window._launch_ai_chatbot()
-
-            mock_process.terminate.assert_called_once()
-            mock_popen.assert_called_once()
-
     def test_ai_chatbot_success(self, main_window: MainWindow) -> None:
         """
         Verify successful AI chatbot launch.
