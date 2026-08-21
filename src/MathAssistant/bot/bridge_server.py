@@ -79,7 +79,7 @@ class Config:
     # Logging Configuration
     LOG_LEVEL = logging.INFO
     LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - [%(threadName)s] - %(message)s"
-    LOG_FILE = "bridge_server.log"
+    LOG_FILE = "./logs/bridge_server.log"
     LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
     LOG_BACKUP_COUNT = 5
 

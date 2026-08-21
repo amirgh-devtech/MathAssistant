@@ -329,8 +329,8 @@ body {{
 
 <div class="sign-wrap">
   <div class="header">
-    <h1>🔬 آزمایشگاه مجازی</h1>
-    <div class="stats"><strong id="count">۰</strong> شبیه‌ساز تعاملی — فیزیک · شیمی · ریاضی · زیست</div>
+    <h1>🔬🧮 آزمایشگاه مجازی ریاضی</h1>
+    <div class="stats"><strong id="count">۰</strong> شبیه‌ساز تعاملی — با این‌ها ریاضی رو قورت بده!</div>
   </div>
 </div>
 

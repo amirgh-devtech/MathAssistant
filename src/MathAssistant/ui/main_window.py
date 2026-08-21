@@ -55,6 +55,12 @@ from MathAssistant.utils.system_tools import (
     SystemInfo, ProjectPaths, get_system_report
 )
 
+from MathAssistant.bot.chatbot_launcher import (
+    launch_chatbot,
+    stop_chatbot,
+    is_chatbot_running,
+)
+
 # آداپتور Qt
 _adapter = QtAdapter()
 
@@ -962,52 +968,34 @@ class MainWindow(QMainWindow):
 
     @show_error_on_failure
     def _launch_ai_chatbot(self) -> None:
-        script_path = ProjectPaths.get_root() / "Math-bot.py"
+        """اجرای چت‌بات - ساده و مستقیم."""
 
-        if not script_path.exists():
-            QMessageBox.warning(
-                self, "خطا",
-                f"فایل Math-bot.py یافت نشد.\nمسیر: {script_path}"
-                f"\nمتاسفانه این سرویس به دلیل عدم دسترسی به اینترنت بین‌الملل در دسترس نمی‌باشد."
-                f"\nباتشکر از شکیبایی شما..."
-            )
-            return
-
-        # Check existing process
-        if self._ai_chatbot_process and self._ai_chatbot_process.poll() is None:
+        # اگر در حال اجراست
+        if is_chatbot_running():
             reply = QMessageBox.question(
-                self, "در حال اجرا",
-                "دستیار هوش مصنوعی در حال اجراست. اجرای مجدد؟",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                self,
+                "چت‌بات در حال اجراست",
+                "چت‌بات در حال اجراست.\n"
+                "آیا می‌خواهید آن را متوقف کنید؟",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
             )
-            if reply == QMessageBox.No:
-                return
-            try:
-                self._ai_chatbot_process.terminate()
-                self._ai_chatbot_process.wait(timeout=5)
-            except Exception:
-                pass
 
-        # Check permissions
-        if not os.access(str(script_path), os.R_OK | os.X_OK):
-            QMessageBox.warning(self, "خطا", "فایل قابل خواندن یا اجرا نیست.")
+            if reply == QMessageBox.StandardButton.Yes:
+                success, message = stop_chatbot()
+                if success:
+                    QMessageBox.information(self, "موفق", message)
+                else:
+                    QMessageBox.warning(self, "خطا", message)
             return
 
-        import subprocess
-        try:
-            self._ai_chatbot_process = subprocess.Popen(
-                [sys.executable, str(script_path)],
-                shell=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            QMessageBox.information(self, "اجرا شد", "دستیار هوش مصنوعی اجرا شد.")
-        except PermissionError:
-            QMessageBox.warning(self, "خطا", "دسترسی کافی برای اجرا نیست.")
-        except OSError as e:
-            QMessageBox.critical(self, "خطای سیستم", str(e))
-        except Exception as e:
-            QMessageBox.critical(self, "خطا", f"خطای غیرمنتظره: {e}")
+        # اجرای چت‌بات
+        success, message = launch_chatbot()
+
+        if success:
+            QMessageBox.information(self, "موفق", f"✅ {message}")
+        else:
+            QMessageBox.warning(self, "خطا", f"❌ {message}")
 
     @show_error_on_failure
     def _show_about(self) -> None:
