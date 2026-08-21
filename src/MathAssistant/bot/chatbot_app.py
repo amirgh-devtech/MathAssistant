@@ -1162,7 +1162,7 @@ class MathChatBotApp(QMainWindow):
 
         # New chat button
         self.new_chat_button = QPushButton("گفتگوی جدید")
-        self.new_chat_button.clicked.connect(self.new_chat)
+        self.new_chat_button.clicked.connect(lambda: self.new_chat(show_welcome=False))
         self.style_button(self.new_chat_button)
         toolbar_layout.addWidget(self.new_chat_button)
 
@@ -1389,8 +1389,12 @@ class MathChatBotApp(QMainWindow):
         )
         self.threadpool.start(worker)
 
-    def new_chat(self):
-        """Start a new conversation."""
+    def new_chat(self, show_welcome: bool = False):
+        """Start a new conversation.
+
+        Args:
+            show_welcome: If True, displays a welcome message from the bot
+        """
         # Save current conversation
         if self.current_conversation and self.current_conversation.messages:
             self.db_manager.save_conversation(self.current_conversation)
@@ -1403,8 +1407,13 @@ class MathChatBotApp(QMainWindow):
         # Clear chat view
         self.history_view.setHtml(self.get_html_template(), QUrl("about:blank"))
 
-        # Show welcome message
-        self.perform_initial_setup()
+        # Reset UI state
+        self.set_ui_processing_state(False)
+        self.status_label.setText("آماده دریافت پیام...")
+
+        # Show welcome message if requested
+        if show_welcome:
+            self.perform_initial_setup()
 
     def save_chat(self):
         """Save current conversation."""

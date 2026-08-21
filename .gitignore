@@ -22,6 +22,7 @@ out/
 __pycache__/
 *.egg-info/
 LABs/
+*.db
 
 # === Virtual Environments ===
 .venv/
@@ -81,3 +82,4 @@ htmlcov/
 coverage.xml
 *.cover
 cover/
+assets/data/chat_history.db
